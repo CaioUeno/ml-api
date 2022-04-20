@@ -19,7 +19,7 @@ class Tweet(BaseTweet):
     tweeted_at: str
     text: str
     sentiment: int
-    hastags: List[str]
+    hashtags: List[str]
     retweets: List[user.RetweetUser]
     likes: List[user.LikeUser]
 
