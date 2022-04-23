@@ -1,74 +1,41 @@
+import logging
 from typing import Any
 
-from core.schemas import user
 from core import utils
+from core.schemas import user
+from db import client
+from elasticsearch import exceptions
 from fastapi import APIRouter
+
+USERS_INDEX = "users-index"
+
+logger = logging.getLogger(__name__)
+
+logger.setLevel("INFO")
 
 router = APIRouter()
 
 
-@router.get("/{user_id}", response_model=user.User)
+@router.get("/{user_id}", response_model=user.User, status_code=200)
 def get_user(user_id: str) -> Any:
-
-    fake_user = {
-        "id": "dde",
-        "username": "caio",
-        "joined_at": utils.time_now(),
-        "follows": [
-            {
-                "id": "abc",
-                "followed_at": utils.time_now(),
-            }
-        ],
-        "followers": [],
-    }
-
-    return fake_user
+    return NotImplementedError()
 
 
-@router.post("/", response_model=user.User)
+@router.post("/", response_model=user.User, status_code=201)
 def create_user(new_user: user.NewUser) -> Any:
-
-    new_user = user.User(
-        id="dde",
-        username=new_user["username"],
-        joined_at=utils.time_now(),
-        follows=[],
-        followers=[],
-    )
-
-    return new_user
+    return NotImplementedError()
 
 
-@router.delete("/{user_id}", response_model=user.User)
+@router.delete("/{user_id}", response_model=user.User, status_code=200)
 def delete_user(user_id: str) -> Any:
-
-    return {
-        "id": "dde",
-        "username": "caio",
-        "joined_at": utils.time_now(),
-        "follows": [{"id": "abc", "followed_at": utils.time_now()}],
-        "followers": [],
-    }
+    return NotImplementedError()
 
 
-@router.post("/{user_id}/follow/{other_id}", response_model=user.User)
+@router.put("/{user_id}/follow/{other_id}", response_model=user.User, status_code=200)
 def follow(user_id: str, other_id: str) -> Any:
-    return {
-        "id": "dde",
-        "username": "caio",
-        "joined_at": utils.time_now(),
-        "follows": [{"id": "abc", "followed_at": utils.time_now()}],
-        "followers": [],
-    }
+    return NotImplementedError()
 
 
-@router.delete("/{user_id}/unfollow/{other_id}", response_model=user.User)
+@router.put("/{user_id}/unfollow/{other_id}", response_model=user.User, status_code=200)
 def unfollow(user_id: str, other_id: str) -> Any:
-    return {
-        "id": "dde",
-        "username": "caio",
-        "joined_at": utils.time_now(),
-        "follows": [{"id": "abc", "followed_at": utils.time_now()}],
-        "followers": [],
-    }
+    return NotImplementedError()
