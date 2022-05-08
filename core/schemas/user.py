@@ -1,8 +1,17 @@
 from typing import List
 from pydantic import BaseModel
 
+
+class NotFoundUser(BaseModel):
+    pass
+
+class EmptyUser(BaseModel):
+    pass
+
+
 class NewUser(BaseModel):
     username: str
+
 
 class BaseReferenceUser(BaseModel):
     id: str
