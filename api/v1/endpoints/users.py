@@ -76,7 +76,7 @@ def delete_user(user_id: str, response: Response) -> Any:
     if client.es.exists(index=USERS_INDEX, id=user_id):
         document = client.es.get(index=USERS_INDEX, id=user_id)["_source"]
         client.es.delete(index=USERS_INDEX, id=user_id)
-
+        # delete follows and followers
         return document
 
     else:
@@ -100,7 +100,8 @@ def follow(follower_id: str, followed_id: str, response: Response) -> Any:
     if not client.es.exists(index=USERS_INDEX, id=followed_id):
         logger.error(f"")
         response.status_code = 404
-        return {}
+        document = client.es.get(index=USERS_INDEX, id=follower_id)["_source"]
+        return document
 
     # same for both
     followed_at = utils.time_now()
@@ -144,6 +145,54 @@ def follow(follower_id: str, followed_id: str, response: Response) -> Any:
     return document
 
 
-@router.put("/{user_id}/unfollow/{other_id}", response_model=user.User, status_code=200)
-def unfollow(user_id: str, other_id: str) -> Any:
-    return NotImplementedError()
+@router.put(
+    "/{follower_id}/unfollow/{followed_id}",
+    response_model=Union[user.User, user.NotFoundUser],
+    status_code=200,
+)
+def unfollow(follower_id: str, followed_id: str, response: Response) -> Any:
+
+    if not client.es.exists(index=USERS_INDEX, id=follower_id):
+        logger.error(f"")
+        response.status_code = 404
+        return {}
+
+    if not client.es.exists(index=USERS_INDEX, id=followed_id):
+        logger.error(f"")
+        response.status_code = 404
+        document = client.es.get(index=USERS_INDEX, id=follower_id)["_source"]
+        return document
+
+    # update follower user document
+    client.es.update(
+        index=USERS_INDEX,
+        id=follower_id,
+        body={
+            "script": {
+                "source": """
+                                ctx._source.follows.removeIf(f -> f.id == params.user.id)
+                          """,
+                "lang": "painless",
+                "params": {"user": {"id": followed_id}},
+            }
+        },
+    )
+
+    # update followed user document
+    client.es.update(
+        index=USERS_INDEX,
+        id=followed_id,
+        body={
+            "script": {
+                "source": """
+                                ctx._source.followers.removeIf(f -> f.id == params.user.id)
+                          """,
+                "lang": "painless",
+                "params": {"user": {"id": follower_id}},
+            }
+        },
+    )
+
+    document = client.es.get(index=USERS_INDEX, id=follower_id)["_source"]
+
+    return document
