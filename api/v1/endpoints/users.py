@@ -3,8 +3,7 @@ from typing import Any, Union
 
 from core import utils
 from core.schemas import user
-from db import client
-from elasticsearch import exceptions
+import db
 from fastapi import APIRouter, Response
 
 USERS_INDEX = "users-index"
@@ -21,8 +20,8 @@ router = APIRouter()
 )
 def get_user(user_id: str, response: Response) -> Any:
 
-    if client.es.exists(index=USERS_INDEX, id=user_id):
-        document = client.es.get(index=USERS_INDEX, id=user_id)["_source"]
+    if db.es.exists(index=USERS_INDEX, id=user_id):
+        document = db.es.get(index=USERS_INDEX, id=user_id)["_source"]
 
     else:
         logger.warning(f"Document not found: {user_id}")
@@ -46,10 +45,10 @@ def create_user(new_user: user.NewUser, response: Response) -> Any:
     # check if username already exists
     new_user_id = utils.generate_md5(new_user.username)
 
-    if client.es.exists(index=USERS_INDEX, id=new_user_id):
+    if db.es.exists(index=USERS_INDEX, id=new_user_id):
 
         logger.error(f"Username already exists: {new_user.username}")
-        document = client.es.get(index=USERS_INDEX, id=new_user_id)["_source"]
+        document = db.es.get(index=USERS_INDEX, id=new_user_id)["_source"]
         response.status_code = 409
 
         return document
@@ -63,7 +62,7 @@ def create_user(new_user: user.NewUser, response: Response) -> Any:
         "followers": [],
     }
 
-    client.es.create(index=USERS_INDEX, id=new_user_id, body=new_document)
+    db.es.create(index=USERS_INDEX, id=new_user_id, body=new_document)
 
     return new_document
 
@@ -73,10 +72,52 @@ def create_user(new_user: user.NewUser, response: Response) -> Any:
 )
 def delete_user(user_id: str, response: Response) -> Any:
 
-    if client.es.exists(index=USERS_INDEX, id=user_id):
-        document = client.es.get(index=USERS_INDEX, id=user_id)["_source"]
-        client.es.delete(index=USERS_INDEX, id=user_id)
+    if db.es.exists(index=USERS_INDEX, id=user_id):
+        document = db.es.get(index=USERS_INDEX, id=user_id)["_source"]
+
+        for follow_item in document["follows"]:
+            db.es.update(
+                index=USERS_INDEX,
+                id=follow_item["id"],
+                body={
+                    "script": {
+                        "source": """
+                                ctx._source.followers.removeIf(f -> f.id == params.user.id)
+                          """,
+                        "lang": "painless",
+                        "params": {"user": {"id": user_id}},
+                    }
+                },
+            )
+
         # delete follows and followers
+        for follower_item in document["followers"]:
+            db.es.update(
+                index=USERS_INDEX,
+                id=follower_item["id"],
+                body={
+                    "script": {
+                        "source": """
+                                ctx._source.follows.removeIf(f -> f.id == params.user.id)
+                          """,
+                        "lang": "painless",
+                        "params": {"user": {"id": user_id}},
+                    }
+                },
+            )
+
+        db.es.update(
+            index=USERS_INDEX,
+            id=user_id,
+            body={"doc": {"follows": [], "followers": []}},
+        )
+
+        # retrieve the updated document
+        document = db.es.get(index=USERS_INDEX, id=user_id)["_source"]
+
+        # permanently delete it
+        db.es.delete(index=USERS_INDEX, id=user_id)
+
         return document
 
     else:
@@ -92,22 +133,22 @@ def delete_user(user_id: str, response: Response) -> Any:
 )
 def follow(follower_id: str, followed_id: str, response: Response) -> Any:
 
-    if not client.es.exists(index=USERS_INDEX, id=follower_id):
-        logger.error(f"")
+    if not db.es.exists(index=USERS_INDEX, id=follower_id):
+        logger.error(f"Error")
         response.status_code = 404
         return {}
 
-    if not client.es.exists(index=USERS_INDEX, id=followed_id):
-        logger.error(f"")
+    if not db.es.exists(index=USERS_INDEX, id=followed_id):
+        logger.error(f"Error")
         response.status_code = 404
-        document = client.es.get(index=USERS_INDEX, id=follower_id)["_source"]
+        document = db.es.get(index=USERS_INDEX, id=follower_id)["_source"]
         return document
 
     # same for both
     followed_at = utils.time_now()
 
     # update follower user document
-    client.es.update(
+    db.es.update(
         index=USERS_INDEX,
         id=follower_id,
         body={
@@ -124,7 +165,7 @@ def follow(follower_id: str, followed_id: str, response: Response) -> Any:
     )
 
     # update followed user document
-    client.es.update(
+    db.es.update(
         index=USERS_INDEX,
         id=followed_id,
         body={
@@ -140,7 +181,7 @@ def follow(follower_id: str, followed_id: str, response: Response) -> Any:
         },
     )
 
-    document = client.es.get(index=USERS_INDEX, id=follower_id)["_source"]
+    document = db.es.get(index=USERS_INDEX, id=follower_id)["_source"]
 
     return document
 
@@ -152,19 +193,19 @@ def follow(follower_id: str, followed_id: str, response: Response) -> Any:
 )
 def unfollow(follower_id: str, followed_id: str, response: Response) -> Any:
 
-    if not client.es.exists(index=USERS_INDEX, id=follower_id):
-        logger.error(f"")
+    if not db.es.exists(index=USERS_INDEX, id=follower_id):
+        logger.error(f"user doesn't exists")
         response.status_code = 404
         return {}
 
-    if not client.es.exists(index=USERS_INDEX, id=followed_id):
-        logger.error(f"")
+    if not db.es.exists(index=USERS_INDEX, id=followed_id):
+        logger.error(f"user doesn't exists")
         response.status_code = 404
-        document = client.es.get(index=USERS_INDEX, id=follower_id)["_source"]
+        document = db.es.get(index=USERS_INDEX, id=follower_id)["_source"]
         return document
 
     # update follower user document
-    client.es.update(
+    db.es.update(
         index=USERS_INDEX,
         id=follower_id,
         body={
@@ -179,7 +220,7 @@ def unfollow(follower_id: str, followed_id: str, response: Response) -> Any:
     )
 
     # update followed user document
-    client.es.update(
+    db.es.update(
         index=USERS_INDEX,
         id=followed_id,
         body={
@@ -193,6 +234,6 @@ def unfollow(follower_id: str, followed_id: str, response: Response) -> Any:
         },
     )
 
-    document = client.es.get(index=USERS_INDEX, id=follower_id)["_source"]
+    document = db.es.get(index=USERS_INDEX, id=follower_id)["_source"]
 
     return document

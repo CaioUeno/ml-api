@@ -3,11 +3,13 @@ import pytest
 from core import utils
 from fastapi import testclient
 from main import app
+import db
 
 
-# @pytest.fixture
-# def version():
-#     return "v1"
+# change version to test easily
+@pytest.fixture
+def version() -> str:
+    return "v1"
 
 
 @pytest.fixture
@@ -15,11 +17,12 @@ def client():
     return testclient.TestClient(app)
 
 
+# setup database to keep tests independent
 @pytest.fixture
-def setup_db(client):
+def setup_db() -> bool:
 
-    if client.indices.exists("users-index"):
-        client.indices.delete("users-index")
+    if db.es.indices.exists("users-index"):
+        db.es.indices.delete("users-index")
 
     users_configs = {
         "mappings": {
@@ -51,11 +54,11 @@ def setup_db(client):
         }
     }
 
-    client.indices.create(index="users-index", body=users_configs)
+    db.es.indices.create(index="users-index", body=users_configs)
 
     # test users
     testuser1 = "testuser1"
-    client.create(
+    db.es.create(
         "users-index",
         id=utils.generate_md5(testuser1),
         body={
@@ -68,7 +71,7 @@ def setup_db(client):
     )
 
     testuser2 = "testuser2"
-    client.create(
+    db.es.create(
         "users-index",
         id=utils.generate_md5(testuser2),
         body={
@@ -81,7 +84,7 @@ def setup_db(client):
     )
 
     testuser3 = "testuser3"
-    client.create(
+    db.es.create(
         "users-index",
         id=utils.generate_md5(testuser3),
         body={
@@ -94,19 +97,29 @@ def setup_db(client):
                     "followed_at": "2022-05-09 19:07:03 -0300",
                 }
             ],
-            "followers": [],
+            "followers": [
+                {
+                    "id": utils.generate_md5("testuser4"),
+                    "followed_at": "2022-05-09 19:07:03 -0300",
+                }
+            ],
         },
     )
 
     testuser4 = "testuser4"
-    client.create(
+    db.es.create(
         "users-index",
         id=utils.generate_md5(testuser4),
         body={
             "id": utils.generate_md5(testuser4),
             "username": testuser4,
             "joined_at": utils.time_now(),
-            "follows": [],
+            "follows": [
+                {
+                    "id": utils.generate_md5(testuser3),
+                    "followed_at": "2022-05-09 19:07:03 -0300",
+                }
+            ],
             "followers": [
                 {
                     "id": utils.generate_md5(testuser3),
@@ -116,22 +129,33 @@ def setup_db(client):
         },
     )
 
+    return True
+
 
 class TestGetUser:
-    def test_nonexistent_user(self, client):
 
-        response = client.get(f"api/v1/users/nonexistent")
+    """
+    Test retrieve user by id.
+    """
+
+    def test_nonexistent_user(self, version, client, setup_db):
+
+        assert setup_db
+
+        response = client.get(f"api/{version}/users/nonexistent")
         expected_user = dict(response.json())
 
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_expected(self, client):
+    def test_expected(self, version, client, setup_db):
+
+        assert setup_db
 
         testuser1_id = utils.generate_md5("testuser1")
 
         # get testuser1
-        response = client.get(f"api/v1/users/{testuser1_id}")
+        response = client.get(f"api/{version}/users/{testuser1_id}")
         expected_user = dict(response.json())
 
         assert expected_user["id"] == testuser1_id
@@ -140,35 +164,48 @@ class TestGetUser:
 
 
 class TestCreateUser:
-    def test_invalid_name(self, client):
+
+    """
+    Test create a new user.
+    """
+
+    def test_invalid_name(self, version, client, setup_db):
+
+        assert setup_db
 
         # username with invalid chars
         invalid_username = "caio!@@#"
 
-        response = client.post("api/v1/users/", json={"username": invalid_username})
+        response = client.post(
+            f"api/{version}/users/", json={"username": invalid_username}
+        )
         expected_user = dict(response.json())
 
         assert expected_user == {}
         assert response.status_code == 400
 
-    def test_expected(self, client):
+    def test_expected(self, version, client, setup_db):
+
+        assert setup_db
 
         username = "".join(random.sample("abcdefghijklmnopqrstuvxwyz", 5))
         idd = utils.generate_md5(username)
 
-        response = client.post("api/v1/users/", json={"username": username})
+        response = client.post(f"api/{version}/users/", json={"username": username})
         expected_user = dict(response.json())
 
         assert expected_user["id"] == idd
         assert expected_user["username"] == username
         assert response.status_code == 201
 
-    def test_existent_user(self, client):
+    def test_existent_user(self, version, client, setup_db):
+
+        assert setup_db
 
         username = "testuser1"
         idd = utils.generate_md5(username)
 
-        response = client.post("api/v1/users/", json={"username": username})
+        response = client.post(f"api/{version}/users/", json={"username": username})
         expected_user = dict(response.json())
 
         assert expected_user["id"] == idd
@@ -176,59 +213,99 @@ class TestCreateUser:
         assert response.status_code == 409
 
 
-# class TestDeleteUser:
-#     def test_nonexistent_user(self, client):
+class TestDeleteUser:
 
-#         response = client.delete(f"api/v1/users/nonexistent")
-#         doc = dict(response.json())
+    """
+    Test delete an user.
+    """
 
-#         assert doc == {}
-#         assert response.status_code == 404
+    def test_nonexistent_user(self, version, client, setup_db):
 
-#     def test_standard_behaviour(self, client):
-#         response = client.delete(f"api/v1/users/{utils.generate_md5('caioueno')}")
-#         doc = dict(response.json())
+        assert setup_db
 
-#         assert doc["id"] == utils.generate_md5("caioueno")
-#         assert doc["username"] == "caioueno"
-#         assert response.status_code == 200
-
-
-class TestFollow:
-    def test_nonexistent_follower(self, client):
-
-        testuser2_id = utils.generate_md5("testuser2")
-
-        response = client.put(f"api/v1/users/nonexistent/follow/{testuser2_id}")
+        response = client.delete(f"api/{version}/users/nonexistent")
         expected_user = dict(response.json())
 
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_nonexistent_followed(self, client):
+    def test_expected(self, version, client, setup_db):
+
+        assert setup_db
+
+        testuser3_id = utils.generate_md5("testuser3")
+        testuser4_id = utils.generate_md5("testuser4")
+
+        response = client.delete(f"api/{version}/users/{testuser3_id}")
+        expected_user = dict(response.json())
+
+        assert expected_user["id"] == testuser3_id
+        assert expected_user["username"] == "testuser3"
+        assert expected_user["follows"] == []
+        assert expected_user["followers"] == []
+        assert response.status_code == 200
+
+        # check if testuser4 document was updated as well
+        response = client.get(f"api/{version}/users/{testuser4_id}")
+        expected_user = dict(response.json())
+
+        follows_users_ids = [item["id"] for item in expected_user["follows"]]
+        followers_users_ids = [item["id"] for item in expected_user["followers"]]
+
+        assert testuser3_id not in follows_users_ids
+        assert testuser3_id not in followers_users_ids
+
+
+class TestFollow:
+
+    """
+    Test follow an user.
+    """
+
+    def test_nonexistent_follower(self, version, client, setup_db):
+
+        assert setup_db
+
+        testuser2_id = utils.generate_md5("testuser2")
+
+        response = client.put(f"api/{version}/users/nonexistent/follow/{testuser2_id}")
+        expected_user = dict(response.json())
+
+        assert expected_user == {}
+        assert response.status_code == 404
+
+    def test_nonexistent_followed(self, version, client, setup_db):
+
+        assert setup_db
 
         testuser1_id = utils.generate_md5("testuser1")
 
-        response = client.put(f"api/v1/users/{testuser1_id}/follow/nonexistent")
+        response = client.put(f"api/{version}/users/{testuser1_id}/follow/nonexistent")
         expected_user = dict(response.json())
 
         assert expected_user["id"] == testuser1_id
         assert response.status_code == 404
 
-    def test_neither_exist(self, client):
+    def test_neither_exist(self, version, client, setup_db):
 
-        response = client.put(f"api/v1/users/nonexistent1/follow/nonexistent2")
+        assert setup_db
+
+        response = client.put(f"api/{version}/users/nonexistent1/follow/nonexistent2")
         expected_user = dict(response.json())
 
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_expected(self, client):
+    def test_expected(self, version, client, setup_db):
+
+        assert setup_db
 
         testuser1_id = utils.generate_md5("testuser1")
         testuser2_id = utils.generate_md5("testuser2")
 
-        response = client.put(f"api/v1/users/{testuser1_id}/follow/{testuser2_id}")
+        response = client.put(
+            f"api/{version}/users/{testuser1_id}/follow/{testuser2_id}"
+        )
         expected_user = dict(response.json())
 
         follow_users_ids = [item["id"] for item in expected_user["follows"]]
@@ -238,7 +315,7 @@ class TestFollow:
         assert response.status_code == 200
 
         # check if testuser2 document was updated as well
-        response = client.get(f"api/v1/users/{testuser2_id}")
+        response = client.get(f"api/{version}/users/{testuser2_id}")
         expected_user = dict(response.json())
 
         followers_users_ids = [item["id"] for item in expected_user["followers"]]
@@ -247,43 +324,60 @@ class TestFollow:
 
 
 class TestUnfollow:
-    def test_nonexistent_follower(self, client):
+
+    """
+    Test unfollow an user.
+    """
+
+    def test_nonexistent_follower(self, version, client, setup_db):
+
+        assert setup_db
 
         testuser4_id = utils.generate_md5("testuser4")
 
-        response = client.put(f"api/v1/users/nonexistent/unfollow/{testuser4_id}")
+        response = client.put(
+            f"api/{version}/users/nonexistent/unfollow/{testuser4_id}"
+        )
         expected_user = dict(response.json())
 
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_nonexistent_followed(self, client):
+    def test_nonexistent_followed(self, version, client, setup_db):
+
+        assert setup_db
 
         testuser3_id = utils.generate_md5("testuser3")
 
-        response = client.put(f"api/v1/users/{testuser3_id}/unfollow/nonexistent")
+        response = client.put(
+            f"api/{version}/users/{testuser3_id}/unfollow/nonexistent"
+        )
         expected_user = dict(response.json())
 
         assert expected_user["id"] == testuser3_id
         assert response.status_code == 404
 
-    def test_neither_exist(self, client):
+    def test_neither_exist(self, version, client, setup_db):
 
-        response = client.put(f"api/v1/users/nonexistent1/unfollow/nonexistent2")
+        assert setup_db
+
+        response = client.put(f"api/{version}/users/nonexistent1/unfollow/nonexistent2")
         expected_user = dict(response.json())
 
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_expected(self, client):
+    def test_expected(self, version, client, setup_db):
+
+        assert setup_db
 
         testuser3_id = utils.generate_md5("testuser3")
         testuser4_id = utils.generate_md5("testuser4")
 
-        response = client.put(f"api/v1/users/{testuser3_id}/unfollow/{testuser4_id}")
+        response = client.put(
+            f"api/{version}/users/{testuser3_id}/unfollow/{testuser4_id}"
+        )
         expected_user = dict(response.json())
-
-        print(expected_user)
 
         follow_users_ids = [item["id"] for item in expected_user["follows"]]
 
@@ -292,7 +386,7 @@ class TestUnfollow:
         assert response.status_code == 200
 
         # check if testuser2 document was updated as well
-        response = client.get(f"api/v1/users/{testuser4_id}")
+        response = client.get(f"api/{version}/users/{testuser4_id}")
         expected_user = dict(response.json())
 
         followers_users_ids = [item["id"] for item in expected_user["followers"]]
