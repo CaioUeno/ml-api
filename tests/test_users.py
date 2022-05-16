@@ -255,6 +255,9 @@ class TestDeleteUser:
         assert testuser3_id not in follows_users_ids
         assert testuser3_id not in followers_users_ids
 
+        # check if tweets and retweets were deleted
+        assert False
+
 
 class TestFollow:
 
@@ -295,6 +298,9 @@ class TestFollow:
 
         assert expected_user == {}
         assert response.status_code == 404
+
+    def test_following_themselves(self, version, client, setup_db):
+        assert False
 
     def test_expected(self, version, client, setup_db):
 
