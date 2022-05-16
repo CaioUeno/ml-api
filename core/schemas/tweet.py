@@ -13,6 +13,14 @@ class ReferenceTweet(BaseTweet):
     referenced_at: str
     tweet_id: str
 
+class NotFoundTweet(BaseModel):
+    pass
+
+class EmptyTweet(BaseModel):
+    pass
+
+class EmptyReferenceTweet(BaseModel):
+    pass
 
 class Tweet(BaseTweet):
     author_id: str
