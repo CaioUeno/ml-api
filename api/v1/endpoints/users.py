@@ -10,7 +10,7 @@ USERS_INDEX = "users-index"
 
 logger = logging.getLogger(__name__)
 
-logger.setLevel("INFO")
+# logger.setLevel("INFO")
 
 router = APIRouter()
 
