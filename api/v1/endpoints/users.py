@@ -7,6 +7,7 @@ import db
 from fastapi import APIRouter, Response
 
 USERS_INDEX = "users-index"
+TWEETS_INDEX = "tweets-index"
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,67 @@ def delete_user(user_id: str, response: Response) -> Any:
                 },
             )
 
+        # delete user's tweets
+        db.es.delete_by_query(
+            index=TWEETS_INDEX,
+            body={"query": {"bool": {"filter": {"term": {"author_id": user_id}}}}},
+        )
+
+        # delete user's retweets
+        db.es.delete_by_query(
+            index=TWEETS_INDEX,
+            body={"query": {"bool": {"filter": {"term": {"user_id": user_id}}}}},
+        )
+
+        # update tweets that user gave retweet and/or like
+        db.es.update_by_query(
+            index=TWEETS_INDEX,
+            body={
+                "query": {
+                    "bool": {
+                        "filter": {
+                            "nested": {
+                                "path": "retweets",
+                                "query": {"term": {"retweets.id": user_id}},
+                            }
+                        }
+                    }
+                },
+                "script": {
+                    "source": """
+                                ctx._source.retweets.removeIf(f -> f.id == params.user.id)
+                          """,
+                    "lang": "painless",
+                    "params": {"user": {"id": user_id}},
+                },
+            },
+            refresh=True
+        )
+
+        db.es.update_by_query(
+            index=TWEETS_INDEX,
+            body={
+                "query": {
+                    "bool": {
+                        "filter": {
+                            "nested": {
+                                "path": "likes",
+                                "query": {"term": {"likes.id": user_id}},
+                            }
+                        }
+                    }
+                },
+                "script": {
+                    "source": """
+                                ctx._source.likes.removeIf(f -> f.id == params.user.id)
+                          """,
+                    "lang": "painless",
+                    "params": {"user": {"id": user_id}},
+                },
+            },
+            refresh=True
+        )
+
         db.es.update(
             index=USERS_INDEX,
             id=user_id,
@@ -143,6 +205,10 @@ def follow(follower_id: str, followed_id: str, response: Response) -> Any:
         response.status_code = 404
         document = db.es.get(index=USERS_INDEX, id=follower_id)["_source"]
         return document
+
+    if follower_id == followed_id:
+        response.status_code = 500
+        return {}
 
     # same for both
     followed_at = utils.time_now()
@@ -203,6 +269,10 @@ def unfollow(follower_id: str, followed_id: str, response: Response) -> Any:
         response.status_code = 404
         document = db.es.get(index=USERS_INDEX, id=follower_id)["_source"]
         return document
+
+    if follower_id == followed_id:
+        response.status_code = 500
+        return {}
 
     # update follower user document
     db.es.update(
