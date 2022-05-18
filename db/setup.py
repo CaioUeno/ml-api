@@ -106,6 +106,42 @@ def populate_indices():
         },
     )
 
+    testuser3 = "testuser3"
+    es.create(
+        "users-index",
+        id=utils.generate_md5(testuser3),
+        body={
+            "id": utils.generate_md5(testuser3),
+            "username": testuser3,
+            "joined_at": utils.time_now(),
+            "follows": [
+                {
+                    "id": utils.generate_md5("testuser4"),
+                    "followed_at": "2022-05-09 19:07:03 -0300",
+                }
+            ],
+            "followers": [],
+        },
+    )
+
+    testuser4 = "testuser4"
+    es.create(
+        "users-index",
+        id=utils.generate_md5(testuser4),
+        body={
+            "id": utils.generate_md5(testuser4),
+            "username": testuser4,
+            "joined_at": utils.time_now(),
+            "follows": [],
+            "followers": [
+                {
+                    "id": utils.generate_md5(testuser3),
+                    "followed_at": "2022-05-09 19:07:03 -0300",
+                }
+            ],
+        },
+    )
+
     # test tweet
     tweet1 = "opa opa"
 
