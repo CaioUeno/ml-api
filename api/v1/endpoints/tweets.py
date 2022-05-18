@@ -38,19 +38,16 @@ def get_tweet(tweet_id: str, response: Response) -> Any:
 )
 def get_user_tweets(user_id: str, response: Response) -> Any:
 
-    print(
-        db.es.search(
-            body={
-                "query": {
-                    "bool": {
-                        "filter": {"term": {"author_id": utils.generate_md5("johndoe")}}
-                    }
-                }
-            },
-            index="tweets-index",
-        )
-    )
-    return NotImplementedError()
+    if not db.es.exists(index=USERS_INDEX, id=user_id):
+        response.status_code = 404
+        return []
+
+    hits = db.es.search(
+        body={"query": {"bool": {"filter": {"term": {"author_id": user_id}}}}},
+        index=TWEETS_INDEX,
+    )["hits"]["hits"]
+
+    return [hit["_source"] for hit in hits]
 
 
 @router.get(
@@ -204,7 +201,7 @@ def like(user_id: str, tweet_id: str, response: Response) -> Any:
     status_code=200,
 )
 def delete_tweet(tweet_id: str, response: Response) -> Any:
-    
+
     if not db.es.exists(index=TWEETS_INDEX, id=tweet_id):
         response.status_code = 404
         return {}
@@ -212,14 +209,34 @@ def delete_tweet(tweet_id: str, response: Response) -> Any:
     document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
 
     if document.get("author_id", False):
-        
-        db.es.update_by_query()
 
         db.es.update(
             index=TWEETS_INDEX,
             id=tweet_id,
             body={"doc": {"retweets": [], "likes": []}},
         )
+
+        db.es.delete_by_query(
+            index=TWEETS_INDEX,
+            body={"query": {"bool": {"filter": {"term": {"tweet_id": tweet_id}}}}},
+        )
+    else:
+
+        db.es.update(
+                index=TWEETS_INDEX,
+                id=document["tweet_id"],
+                body={
+                    
+                    "script": {
+                        "source": """
+                                    ctx._source.retweets.removeIf(f -> f.id == params.user.id)
+                            """,
+                        "lang": "painless",
+                        "params": {"user": {"id": document["user_id"]}},
+                    },
+                },
+                refresh=True
+            )
 
     # retrieve the updated document
     document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
