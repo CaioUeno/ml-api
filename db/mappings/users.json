@@ -1,0 +1,40 @@
+{
+    "mappings": {
+        "properties": {
+            "id": {
+                "type": "keyword"
+            },
+            "username": {
+                "type": "keyword"
+            },
+            "joined_at": {
+                "type": "date",
+                "format": "yyyy-MM-dd HH:mm:ss x"
+            },
+            "follows": {
+                "type": "nested",
+                "properties": {
+                    "id": {
+                        "type": "keyword"
+                    },
+                    "followed_at": {
+                        "type": "date",
+                        "format": "yyyy-MM-dd HH:mm:ss x"
+                    }
+                }
+            },
+            "followers": {
+                "type": "nested",
+                "properties": {
+                    "id": {
+                        "type": "keyword"
+                    },
+                    "followed_at": {
+                        "type": "date",
+                        "format": "yyyy-MM-dd HH:mm:ss x"
+                    }
+                }
+            }
+        }
+    }
+}

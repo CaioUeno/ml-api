@@ -1,0 +1,59 @@
+{
+    "mappings": {
+        "properties": {
+            "id": {
+                "type": "keyword"
+            },
+            "author_id": {
+                "type": "keyword"
+            },
+            "tweeted_at": {
+                "type": "date",
+                "format": "yyyy-MM-dd HH:mm:ss x"
+            },
+            "text": {
+                "type": "text"
+            },
+            "sentiment": {
+                "type": "integer"
+            },
+            "hashtags": {
+                "type": "keyword"
+            },
+            "retweets": {
+                "type": "nested",
+                "properties": {
+                    "id": {
+                        "type": "keyword"
+                    },
+                    "retweeted_at": {
+                        "type": "date",
+                        "format": "yyyy-MM-dd HH:mm:ss x"
+                    }
+                }
+            },
+            "likes": {
+                "type": "nested",
+                "properties": {
+                    "id": {
+                        "type": "keyword"
+                    },
+                    "liked_at": {
+                        "type": "date",
+                        "format": "yyyy-MM-dd HH:mm:ss x"
+                    }
+                }
+            },
+            "user_id": {
+                "type": "keyword"
+            },
+            "referenced_at": {
+                "type": "date",
+                "format": "yyyy-MM-dd HH:mm:ss x"
+            },
+            "tweet_id": {
+                "type": "keyword"
+            }
+        }
+    }
+}
