@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+class Empty(BaseModel):
+    pass
 
 class InInstance(BaseModel):
     text: str

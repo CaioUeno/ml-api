@@ -1,13 +1,14 @@
 import logging
-from typing import Any, List, Union
+from typing import List, Union
 
 import db
+import ml
 from core import utils
-from core.schemas import tweet, user
+from core.schemas import tweet
 from fastapi import APIRouter, Response
 
-USERS_INDEX = "users-index"
-TWEETS_INDEX = "tweets-index"
+USERS_INDEX = utils.get_config("elasticsearch.indices", "users")
+TWEETS_INDEX = utils.get_config("elasticsearch.indices", "tweets")
 
 logger = logging.getLogger(__name__)
 
@@ -16,19 +17,21 @@ router = APIRouter()
 
 @router.get(
     "/{tweet_id}",
-    response_model=Union[tweet.Tweet, tweet.ReferenceTweet, tweet.NotFoundTweet],
+    response_model=Union[tweet.Tweet, tweet.ReferenceTweet, tweet.EmptyTweet],
     status_code=200,
 )
-def get_tweet(tweet_id: str, response: Response) -> Any:
+def get_tweet(tweet_id: str, response: Response):
 
-    if db.es.exists(index=TWEETS_INDEX, id=tweet_id):
-        document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
-    else:
-        logger.warning(f"Document not found: {tweet_id}")
-        document = {}
+    if not db.es.exists(index=TWEETS_INDEX, id=tweet_id):
+
+        logger.error(f"(Re)Tweet's document not found: id={tweet_id}")
         response.status_code = 404
 
-    return document
+        return {}
+
+    else:
+        tweet_document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
+        return tweet_document
 
 
 @router.get(
@@ -36,18 +39,25 @@ def get_tweet(tweet_id: str, response: Response) -> Any:
     response_model=List[tweet.Tweet],
     status_code=200,
 )
-def get_user_tweets(user_id: str, response: Response) -> Any:
+def get_user_tweets(user_id: str, response: Response):
 
     if not db.es.exists(index=USERS_INDEX, id=user_id):
+
+        logger.error(f"User's document not found: {user_id}")
         response.status_code = 404
+
         return []
 
-    hits = db.es.search(
-        body={"query": {"bool": {"filter": {"term": {"author_id": user_id}}}}},
-        index=TWEETS_INDEX,
-    )["hits"]["hits"]
+    else:
 
-    return [hit["_source"] for hit in hits]
+        # scroll?
+        hit_documents = db.es.search(
+            body={"query": {"bool": {"filter": {"term": {"author_id": user_id}}}}},
+            index=TWEETS_INDEX,
+        )["hits"]["hits"]
+
+        user_tweets = [hit["_source"] for hit in hit_documents]
+        return user_tweets
 
 
 @router.get(
@@ -55,7 +65,7 @@ def get_user_tweets(user_id: str, response: Response) -> Any:
     response_model=List[tweet.Tweet],
     status_code=200,
 )
-def get_user_timeline(user_id: str) -> Any:
+def get_user_timeline(user_id: str):
     return NotImplementedError()
 
 
@@ -64,43 +74,53 @@ def get_user_timeline(user_id: str) -> Any:
     response_model=Union[tweet.Tweet, tweet.EmptyTweet],
     status_code=201,
 )
-def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response) -> Any:
+def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response):
 
     if not db.es.exists(index=USERS_INDEX, id=user_id):
-        logger.warning(f"User not found: {user_id}")
+
+        logger.error(f"User's document not found: {user_id}")
         response.status_code = 404
+
         return {}
 
-    document = db.es.get(index=USERS_INDEX, id=user_id)["_source"]
-    logger.info(document)
-    if db.es.exists(
-        index=TWEETS_INDEX, id=utils.generate_md5(new_tweet.text + document["username"])
-    ):
+    user_document = db.es.get(index=USERS_INDEX, id=user_id)["_source"]
+
+    # check if same user already published the same text
+    possible_tweet_id = utils.generate_md5(new_tweet.text + user_document["username"])
+
+    if db.es.exists(index=TWEETS_INDEX, id=possible_tweet_id):
+
         logger.warning(f"User already tweeted the same text.")
         response.status_code = 409
-        return db.es.get(
+
+        tweet_document = db.es.get(
             index=TWEETS_INDEX,
-            id=utils.generate_md5(new_tweet.text + document["username"]),
+            id=possible_tweet_id,
         )["_source"]
 
-    # create new document otherwise
-    new_document = {
-        "id": utils.generate_md5(new_tweet.text + document["username"]),
-        "author_id": document["id"],
-        "tweeted_at": utils.time_now(),
-        "text": new_tweet.text,
-        "sentiment": 0,
-        "hashtags": ["#api"],
-        "retweets": [],
-        "likes": [],
-    }
-    db.es.create(
-        index=USERS_INDEX,
-        id=utils.generate_md5(new_tweet.text + document["username"]),
-        body=new_document,
+        return tweet_document
+
+    clf = ml.Dummy()
+
+    # new tweet!
+    new_tweet = tweet.Tweet(
+        id=utils.generate_md5(new_tweet.text + user_document["username"]),
+        author_id=user_document["id"],
+        tweeted_at=utils.time_now(),
+        text=new_tweet.text,
+        sentiment=clf.single_prediction(new_tweet.text),
+        hashtags=utils.extract_hashtags(new_tweet.text),
+        retweets=[],
+        likes=[],
     )
 
-    return new_document
+    db.es.create(
+        index=USERS_INDEX,
+        id=new_tweet.id,
+        body=new_tweet.dict(),
+    )
+
+    return new_tweet.dict()
 
 
 @router.post(
@@ -108,21 +128,36 @@ def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response) -
     response_model=Union[tweet.ReferenceTweet, tweet.EmptyReferenceTweet],
     status_code=201,
 )
-def retweet(user_id: str, tweet_id: str, response: Response) -> Any:
+def retweet(user_id: str, tweet_id: str, response: Response):
 
     if not db.es.exists(index=USERS_INDEX, id=user_id):
+
+        logger.error(f"User's document not found: {user_id}")
         response.status_code = 404
+
         return {}
 
     if not db.es.exists(index=TWEETS_INDEX, id=tweet_id):
+
+        logger.error(f"Tweet's document not found: {tweet_id}")
         response.status_code = 404
+
         return {}
 
-    tweet_doc = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
-    if user_id == tweet_doc["author_id"]:
+    # check if user_id is the tweet's author
+    tweet_document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
+
+    if user_id == tweet_document["author_id"]:
+
+        logger.error(f"Users can not retweet their own tweet")
         response.status_code = 500
+
         return {}
 
+    # same for both
+    retweeted_at = utils.time_now()
+
+    # update tweet's document
     db.es.update(
         index=TWEETS_INDEX,
         id=tweet_id,
@@ -134,26 +169,26 @@ def retweet(user_id: str, tweet_id: str, response: Response) -> Any:
                                     }
                           """,
                 "lang": "painless",
-                "params": {"user": {"id": user_id, "retweeted_at": utils.time_now()}},
+                "params": {"user": {"id": user_id, "retweeted_at": retweeted_at}},
             }
         },
     )
 
-    # create new document otherwise
-    new_document = {
-        "id": utils.generate_md5(tweet_doc["id"] + user_id),
-        "user_id": user_id,
-        "referenced_at": utils.time_now(),
-        "tweet_id": tweet_doc["id"],
-    }
+    # new retweet!
+    new_retweet = tweet.ReferenceTweet(
+        id=utils.generate_md5(tweet_id + user_id),
+        user_id=user_id,
+        referenced_at=retweeted_at,
+        tweet_id=tweet_id,
+    )
 
     db.es.create(
         index=USERS_INDEX,
-        id=utils.generate_md5(tweet_doc["id"] + user_id),
-        body=new_document,
+        id=new_retweet.id,
+        body=new_retweet.dict(),
     )
 
-    return new_document
+    return new_retweet
 
 
 @router.post(
@@ -161,21 +196,33 @@ def retweet(user_id: str, tweet_id: str, response: Response) -> Any:
     response_model=Union[tweet.Tweet, tweet.EmptyTweet],
     status_code=201,
 )
-def like(user_id: str, tweet_id: str, response: Response) -> Any:
+def like(user_id: str, tweet_id: str, response: Response):
 
     if not db.es.exists(index=USERS_INDEX, id=user_id):
+
+        logger.error(f"User's document not found: {user_id}")
         response.status_code = 404
+
         return {}
 
     if not db.es.exists(index=TWEETS_INDEX, id=tweet_id):
+
+        logger.error(f"Tweet's document not found: {tweet_id}")
         response.status_code = 404
+
         return {}
 
-    document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
-    if not document.get("author_id", False):
+    # check if it is a tweet or a retweet
+    unknown_document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
+
+    if "referenced_at" in unknown_document.keys():
+
+        logger.error(f"It is not possible to like a retweet (only tweets)")
         response.status_code = 500
+
         return {}
 
+    # update tweet's document
     db.es.update(
         index=TWEETS_INDEX,
         id=tweet_id,
@@ -192,56 +239,55 @@ def like(user_id: str, tweet_id: str, response: Response) -> Any:
         },
     )
 
-    return db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
+    tweet_document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
+
+    return tweet_document
 
 
 @router.delete(
     "/{tweet_id}",
-    response_model=Union[tweet.Tweet, tweet.ReferenceTweet, tweet.NotFoundTweet],
+    response_model=Union[tweet.Tweet, tweet.ReferenceTweet, tweet.EmptyTweet],
     status_code=200,
 )
-def delete_tweet(tweet_id: str, response: Response) -> Any:
+def delete_tweet(tweet_id: str, response: Response):
 
     if not db.es.exists(index=TWEETS_INDEX, id=tweet_id):
+
+        logger.error(f"Tweet's document not found: {tweet_id}")
         response.status_code = 404
+
         return {}
 
-    document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
+    # check if it is a tweet or a retweet
+    unknown_document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
 
-    if document.get("author_id", False):
+    if "referenced_at" in unknown_document.keys():
 
+        # remove retweet from original tweet
         db.es.update(
             index=TWEETS_INDEX,
-            id=tweet_id,
-            body={"doc": {"retweets": [], "likes": []}},
+            id=unknown_document["tweet_id"],
+            body={
+                "script": {
+                    "source": """
+                                    ctx._source.retweets.removeIf(f -> f.id == params.user.id)
+                            """,
+                    "lang": "painless",
+                    "params": {"user": {"id": unknown_document["user_id"]}},
+                },
+            },
+            refresh=True,
         )
 
+    else:
+
+        # delete all its retweets
         db.es.delete_by_query(
             index=TWEETS_INDEX,
             body={"query": {"bool": {"filter": {"term": {"tweet_id": tweet_id}}}}},
         )
-    else:
-
-        db.es.update(
-                index=TWEETS_INDEX,
-                id=document["tweet_id"],
-                body={
-                    
-                    "script": {
-                        "source": """
-                                    ctx._source.retweets.removeIf(f -> f.id == params.user.id)
-                            """,
-                        "lang": "painless",
-                        "params": {"user": {"id": document["user_id"]}},
-                    },
-                },
-                refresh=True
-            )
-
-    # retrieve the updated document
-    document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
 
     # permanently delete it
     db.es.delete(index=TWEETS_INDEX, id=tweet_id)
 
-    return document
+    return unknown_document
