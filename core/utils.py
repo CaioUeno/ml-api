@@ -2,6 +2,7 @@ from datetime import datetime
 import hashlib
 import re
 from typing import List
+from configparser import RawConfigParser
 
 
 def time_now() -> str:
@@ -23,11 +24,25 @@ def validate_username(text: str) -> bool:
 
     # pattern matched
     if pattern.match(text):
-        
+
         # check if fully or partially matched
         (_, end) = pattern.match(text).span(0)
-        
+
         if end == len(text):
             return True
-    
+
     return False
+
+
+def get_config(section: str, key: str):
+
+    config = RawConfigParser()
+    config.read("api-config.cfg")
+
+    if not config.has_section(section):
+        raise KeyError(f"Section does not exist: {section}.")
+
+    if not config.has_option(section, key):
+        raise KeyError(f"Key does not exist: {key}.")
+
+    return config.get(section, key)
