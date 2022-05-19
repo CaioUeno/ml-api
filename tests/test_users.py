@@ -364,7 +364,7 @@ class TestFollow:
         )
         expected_user = dict(response.json())
 
-        assert expected_user == {}
+        assert expected_user["id"] == testuser1_id
         assert response.status_code == 500
 
     def test_expected(self, version, client, setup_db):
@@ -449,7 +449,7 @@ class TestUnfollow:
         )
         expected_user = dict(response.json())
 
-        assert expected_user == {}
+        assert expected_user["id"] == testuser3_id
         assert response.status_code == 500
 
     def test_expected(self, version, client, setup_db):
