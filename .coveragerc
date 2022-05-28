@@ -1,0 +1,8 @@
+[run]
+branch=True
+source =
+    api/v1/
+    core
+
+[report]
+show_missing=True
