@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Union
 
@@ -22,13 +23,20 @@ router = APIRouter()
 )
 def classify_text(instance: mlio.InInstance, response: Response):
 
+    logging.info(f'Classify text: "{instance.text}"')
+
     if instance.text == "":
+
+        logging.warning(f"Text is an empty string.")
         response.status_code = 500
+
         return instance
 
+    logging.debug("Instantiate classifier and predict text.")
     clf = ml.Dummy()
     pred_sentiment = clf.single_prediction(instance.text)
 
+    logging.debug("Instantiate response model.")
     out = mlio.PredictedSentiment(
         text=instance.text, sentiment=utils.sentiment_to_str(pred_sentiment)
     )
@@ -44,8 +52,13 @@ def quantify_user(
     user_id: str, response: Response, date_from: str = None, date_to: str = None
 ):
 
+    logging.info(f"Quantify tweets of user: {user_id}.")
+
     if not db.es.exists(index=USERS_INDEX, id=user_id):
+
+        logging.error(f"User's document not found: id={user_id}.")
         response.status_code = 404
+
         return {}
 
     query = {
@@ -59,11 +72,14 @@ def quantify_user(
         "aggs": {"sentiments": {"terms": {"field": "sentiment"}}},
     }
 
+    logging.debug(f"Parse date filters to range clause.")
     range_clause = utils.date_filter(date_from, date_to)
 
     if range_clause is not None:
         query["query"]["bool"]["filter"].append(range_clause)
 
+    logging.info(f"Send request to Elasticsearch - search API.")
+    logging.debug(f"Search query: {json.dumps(query)}")
     buckets = db.es.search(index=TWEETS_INDEX, body=query)["aggregations"][
         "sentiments"
     ]["buckets"]
@@ -84,16 +100,21 @@ def quantify_hashtag(
     hashtag: str, response: Response, date_from: str = None, date_to: str = None
 ):
 
+    logging.info(f"Quantify tweets mentioning hashtag: #{hashtag}.")
+
     query = {
         "query": {"bool": {"filter": [{"term": {"hashtags": "#" + hashtag}}]}},
         "aggs": {"sentiments": {"terms": {"field": "sentiment"}}},
     }
 
+    logging.debug(f"Parse date filters to range clause.")
     range_clause = utils.date_filter(date_from, date_to)
 
     if range_clause is not None:
         query["query"]["bool"]["filter"].append(range_clause)
 
+    logging.info(f"Send request to Elasticsearch - search API.")
+    logging.debug(f"Search query: {json.dumps(query)}")
     buckets = db.es.search(index=TWEETS_INDEX, body=query,)["aggregations"][
         "sentiments"
     ]["buckets"]

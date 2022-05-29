@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import List, Union
 
@@ -22,15 +23,21 @@ router = APIRouter()
 )
 def get_tweet(tweet_id: str, response: Response):
 
+    logging.info(f"Retrieve tweet: {tweet_id}.")
+
     if not db.es.exists(index=TWEETS_INDEX, id=tweet_id):
 
-        logger.error(f"(Re)Tweet's document not found: id={tweet_id}")
+        logger.error(f"(Re)Tweet's document not found: id={tweet_id}.")
         response.status_code = 404
 
         return {}
 
     else:
+
         tweet_document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
+
+        logging.debug(f"Retrieved document: {json.dumps(tweet_document)}")
+
         return tweet_document
 
 
@@ -41,6 +48,8 @@ def get_tweet(tweet_id: str, response: Response):
 )
 def get_user_tweets(user_id: str, response: Response):
 
+    logging.info(f"Retrieve tweets of user: {user_id}.")
+
     if not db.es.exists(index=USERS_INDEX, id=user_id):
 
         logger.error(f"User's document not found: {user_id}")
@@ -50,13 +59,16 @@ def get_user_tweets(user_id: str, response: Response):
 
     else:
 
-        # scroll?
-        hit_documents = db.es.search(
-            body={"query": {"bool": {"filter": {"term": {"author_id": user_id}}}}},
-            index=TWEETS_INDEX,
-        )["hits"]["hits"]
+        query = {"query": {"bool": {"filter": {"term": {"author_id": user_id}}}}}
+
+        logging.info(f"Send request to Elasticsearch - search API.")
+        logging.debug(f"Search query: {json.dumps(query)}")
+
+        # search API -> scroll API (what if user have more than 10k tweets?)
+        hit_documents = db.es.search(body=query, index=TWEETS_INDEX)["hits"]["hits"]
 
         user_tweets = [hit["_source"] for hit in hit_documents]
+
         return user_tweets
 
 
@@ -76,9 +88,11 @@ def get_user_timeline(user_id: str):
 )
 def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response):
 
+    logging.info(f'User ({user_id}) publishes new tweet: "{new_tweet.text}".')
+
     if not db.es.exists(index=USERS_INDEX, id=user_id):
 
-        logger.error(f"User's document not found: {user_id}")
+        logger.error(f"User's document not found: {user_id}.")
         response.status_code = 404
 
         return {}
@@ -100,8 +114,10 @@ def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response):
 
         return tweet_document
 
+    logging.debug(f"Instantiate classifier and predict new text.")
     clf = ml.Dummy()
 
+    logging.debug(f"Instantiate new tweet's document.")
     # new tweet!
     new_tweet = tweet.Tweet(
         id=utils.generate_md5(new_tweet.text + user_document["username"]),
@@ -114,11 +130,15 @@ def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response):
         likes=[],
     )
 
+    logging.info(f"Send request to Elasticsearch - create document.")
+    logging.debug(f"Document body: {json.dumps(new_tweet.dict())}")
     db.es.create(
         index=USERS_INDEX,
         id=new_tweet.id,
         body=new_tweet.dict(),
     )
+
+    logging.debug(f"New tweet's document created.")
 
     return new_tweet.dict()
 
@@ -130,16 +150,18 @@ def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response):
 )
 def retweet(user_id: str, tweet_id: str, response: Response):
 
+    logging.info(f"User ({user_id}) retweets tweet ({tweet_id}).")
+
     if not db.es.exists(index=USERS_INDEX, id=user_id):
 
-        logger.error(f"User's document not found: {user_id}")
+        logger.error(f"User's document not found: {user_id}.")
         response.status_code = 404
 
         return {}
 
     if not db.es.exists(index=TWEETS_INDEX, id=tweet_id):
 
-        logger.error(f"Tweet's document not found: {tweet_id}")
+        logger.error(f"Tweet's document not found: {tweet_id}.")
         response.status_code = 404
 
         return {}
@@ -149,7 +171,7 @@ def retweet(user_id: str, tweet_id: str, response: Response):
 
     if user_id == tweet_document["author_id"]:
 
-        logger.error(f"Users can not retweet their own tweet")
+        logger.error(f"Users can not retweet their own tweet.")
         response.status_code = 500
 
         return {}
@@ -157,23 +179,25 @@ def retweet(user_id: str, tweet_id: str, response: Response):
     # same for both
     retweeted_at = utils.time_now()
 
-    # update tweet's document
-    db.es.update(
-        index=TWEETS_INDEX,
-        id=tweet_id,
-        body={
-            "script": {
-                "source": """
+    script = {
+        "script": {
+            "source": """
                                 if (!ctx._source.retweets.contains(ctx._source.retweets.find(f -> f.id == params.user.id))) {
                                         ctx._source.retweets.add(params.user)
                                     }
                           """,
-                "lang": "painless",
-                "params": {"user": {"id": user_id, "retweeted_at": retweeted_at}},
-            }
-        },
-    )
+            "lang": "painless",
+            "params": {"user": {"id": user_id, "retweeted_at": retweeted_at}},
+        }
+    }
 
+    logging.info(f"Send request to Elasticsearch - update API.")
+    logging.debug(f"Script body: {json.dumps(script)}")
+
+    # update tweet's document
+    db.es.update(index=TWEETS_INDEX, id=tweet_id, body=script)
+
+    logging.info(f"Instantiate new retweet's document.")
     # new retweet!
     new_retweet = tweet.ReferenceTweet(
         id=utils.generate_md5(tweet_id + user_id),
@@ -182,11 +206,15 @@ def retweet(user_id: str, tweet_id: str, response: Response):
         tweet_id=tweet_id,
     )
 
+    logging.info(f"Send request to Elasticsearch - create document.")
+    logging.debug(f"Document body: {json.dumps(new_retweet.dict())}")
     db.es.create(
         index=USERS_INDEX,
         id=new_retweet.id,
         body=new_retweet.dict(),
     )
+
+    logging.debug(f"New retweet's document created.")
 
     return new_retweet
 
@@ -198,16 +226,18 @@ def retweet(user_id: str, tweet_id: str, response: Response):
 )
 def like(user_id: str, tweet_id: str, response: Response):
 
+    logging.info(f"User ({user_id}) likes tweet ({tweet_id}).")
+
     if not db.es.exists(index=USERS_INDEX, id=user_id):
 
-        logger.error(f"User's document not found: {user_id}")
+        logger.error(f"User's document not found: {user_id}.")
         response.status_code = 404
 
         return {}
 
     if not db.es.exists(index=TWEETS_INDEX, id=tweet_id):
 
-        logger.error(f"Tweet's document not found: {tweet_id}")
+        logger.error(f"Tweet's document not found: {tweet_id}.")
         response.status_code = 404
 
         return {}
@@ -217,27 +247,28 @@ def like(user_id: str, tweet_id: str, response: Response):
 
     if "referenced_at" in unknown_document.keys():
 
-        logger.error(f"It is not possible to like a retweet (only tweets)")
+        logger.error(f"It is not possible to like a retweet (only tweets).")
         response.status_code = 500
 
         return {}
 
-    # update tweet's document
-    db.es.update(
-        index=TWEETS_INDEX,
-        id=tweet_id,
-        body={
-            "script": {
-                "source": """
+    script = {
+        "script": {
+            "source": """
                                 if (!ctx._source.likes.contains(ctx._source.likes.find(f -> f.id == params.user.id))) {
                                         ctx._source.likes.add(params.user)
                                     }
                           """,
-                "lang": "painless",
-                "params": {"user": {"id": user_id, "liked_at": utils.time_now()}},
-            }
-        },
-    )
+            "lang": "painless",
+            "params": {"user": {"id": user_id, "liked_at": utils.time_now()}},
+        }
+    }
+
+    logging.info(f"Send request to Elasticsearch - update API.")
+    logging.debug(f"Script body: {json.dumps(script)}")
+
+    # update tweet's document
+    db.es.update(index=TWEETS_INDEX, id=tweet_id, body=script, refresh=True)
 
     tweet_document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
 
@@ -251,9 +282,11 @@ def like(user_id: str, tweet_id: str, response: Response):
 )
 def delete_tweet(tweet_id: str, response: Response):
 
+    logging.info(f"Delete tweet: {tweet_id}.")
+
     if not db.es.exists(index=TWEETS_INDEX, id=tweet_id):
 
-        logger.error(f"Tweet's document not found: {tweet_id}")
+        logger.error(f"Tweet's document not found: {tweet_id}.")
         response.status_code = 404
 
         return {}
@@ -261,31 +294,40 @@ def delete_tweet(tweet_id: str, response: Response):
     # check if it is a tweet or a retweet
     unknown_document = db.es.get(index=TWEETS_INDEX, id=tweet_id)["_source"]
 
+    # if has "referenced_at" field it is a retweet
     if "referenced_at" in unknown_document.keys():
+
+        script = {
+            "script": {
+                "source": """
+                                    ctx._source.retweets.removeIf(f -> f.id == params.user.id)
+                            """,
+                "lang": "painless",
+                "params": {"user": {"id": unknown_document["user_id"]}},
+            },
+        }
+
+        logging.info(f"Send request to Elasticsearch - update API.")
+        logging.debug(f"Script body: {json.dumps(script)}")
 
         # remove retweet from original tweet
         db.es.update(
             index=TWEETS_INDEX,
             id=unknown_document["tweet_id"],
-            body={
-                "script": {
-                    "source": """
-                                    ctx._source.retweets.removeIf(f -> f.id == params.user.id)
-                            """,
-                    "lang": "painless",
-                    "params": {"user": {"id": unknown_document["user_id"]}},
-                },
-            },
+            body=script,
             refresh=True,
         )
 
+    # tweet otherwise
     else:
 
+        query = {"query": {"bool": {"filter": {"term": {"tweet_id": tweet_id}}}}}
+
+        logging.info(f"Send request to Elasticsearch - delete_by_query API.")
+        logging.debug(f"Query body: {json.dumps(query)}")
+
         # delete all its retweets
-        db.es.delete_by_query(
-            index=TWEETS_INDEX,
-            body={"query": {"bool": {"filter": {"term": {"tweet_id": tweet_id}}}}},
-        )
+        db.es.delete_by_query(index=TWEETS_INDEX, body=query, refresh=True)
 
     # permanently delete it
     db.es.delete(index=TWEETS_INDEX, id=tweet_id)
