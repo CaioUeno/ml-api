@@ -12,7 +12,7 @@ jobs:
           name: "Test routes"
           command: |
             pip install -r requirements.txt
-            docker-compose -d up
+            docker-compose up -d
             python -m pytest -v --disable-warnings --durations=0
 
   # build-container:
