@@ -20,21 +20,24 @@ jobs:
       - run:
           name: Install Dependencies
           command : pip install -r requirements.txt
+      # - run:
+      #     name: Everything
+      #     command : |
+      #       docker-compose up -d
+      #       mkdir logs
+      #       python -m pytest -v --disable-warnings --durations=0
       - run:
-          name: Everything
-          command : |
-            docker-compose up -d
-            mkdir logs
-            python -m pytest -v --disable-warnings --durations=0
-      # - run:
-      #     name: Setup Containers
-      #     command: docker-compose up -d
-      # - run:
-      #     name: Create Log Folder
-      #     command: mkdir logs
-      # - run:
-      #     name: Test
-      #     command: python -m pytest -v --disable-warnings --durations=0
+          name: Setup Containers
+          command: docker-compose up -d
+      - run:
+          name: Wait Containers
+          command: sleep 25
+      - run:
+          name: Create Log Folder
+          command: mkdir logs
+      - run:
+          name: Test
+          command: python -m pytest -v --disable-warnings --durations=0
 
   # build-container:
   #   docker:
