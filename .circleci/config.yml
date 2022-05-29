@@ -28,10 +28,10 @@ jobs:
       #       python -m pytest -v --disable-warnings --durations=0
       - run:
           name: Setup Containers
-          command: docker-compose up -d
+          command: docker-compose up
       - run:
           name: Wait Containers
-          command: sleep 25
+          command: sleep 45
       - run:
           name: Create Log Folder
           command: mkdir logs
