@@ -1,161 +1,10 @@
-import json
 import random
-import pytest
 from core import utils
-from fastapi import testclient
-from main import app
-import db
 
 
-# change version to test easily
-@pytest.fixture
-def version() -> str:
-    return "v1"
-
-
-@pytest.fixture
-def client():
-    return testclient.TestClient(app)
 
 
 # setup database to keep tests independent
-@pytest.fixture
-def setup_db() -> bool:
-
-    # delete indices if they already exists
-    if db.es.indices.exists("users-index"):
-        db.es.indices.delete("users-index")
-
-    if db.es.indices.exists("tweets-index"):
-        db.es.indices.delete("tweets-index")
-
-    # load their mapping and create them
-    with open("db/mappings/users.json") as f:
-        db.es.indices.create(index="users-index", body=json.load(f))
-
-    with open("db/mappings/tweets.json") as f:
-        db.es.indices.create(index="tweets-index", body=json.load(f))
-
-    # populate them
-
-    johndoe = "johndoe"
-    jerry = "jerry"
-    josh = "josh"
-
-    db.es.create(
-        "users-index",
-        id=utils.generate_md5(johndoe),
-        body={
-            "id": utils.generate_md5(johndoe),
-            "username": johndoe,
-            "joined_at": utils.time_now(),
-            "follows": [],
-            "followers": [
-                {
-                    "id": utils.generate_md5(jerry),
-                    "followed_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-        },
-    )
-
-    db.es.create(
-        "users-index",
-        id=utils.generate_md5(jerry),
-        body={
-            "id": utils.generate_md5(jerry),
-            "username": jerry,
-            "joined_at": utils.time_now(),
-            "follows": [
-                {
-                    "id": utils.generate_md5(johndoe),
-                    "followed_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-            "followers": [
-                {
-                    "id": utils.generate_md5(josh),
-                    "followed_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-        },
-    )
-
-    db.es.create(
-        "users-index",
-        id=utils.generate_md5(josh),
-        body={
-            "id": utils.generate_md5(josh),
-            "username": josh,
-            "joined_at": utils.time_now(),
-            "follows": [
-                {
-                    "id": utils.generate_md5(jerry),
-                    "followed_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-            "followers": [],
-        },
-    )
-
-    tweet1 = "first tweet example #api"
-    db.es.create(
-        "tweets-index",
-        id=utils.generate_md5(tweet1 + johndoe),
-        body={
-            "id": utils.generate_md5(tweet1 + johndoe),
-            "author_id": utils.generate_md5(johndoe),
-            "tweeted_at": utils.time_now(),
-            "text": tweet1,
-            "sentiment": 0,
-            "hashtags": ["#api"],
-            "retweets": [
-                {
-                    "id": utils.generate_md5(jerry),
-                    "retweeted_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-            "likes": [
-                {
-                    "id": utils.generate_md5(jerry),
-                    "liked_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-        },
-    )
-
-    # retweet
-    db.es.create(
-        "tweets-index",
-        id=utils.generate_md5(utils.generate_md5(tweet1 + johndoe) + jerry),
-        body={
-            "id": utils.generate_md5(utils.generate_md5(tweet1 + johndoe) + jerry),
-            "user_id": utils.generate_md5(jerry),
-            "referenced_at": utils.time_now(),
-            "tweet_id": utils.generate_md5(tweet1 + johndoe),
-        },
-    )
-
-    tweet2 = "second tweet example"
-    db.es.create(
-        "tweets-index",
-        id=utils.generate_md5(tweet2 + jerry),
-        body={
-            "id": utils.generate_md5(tweet2 + jerry),
-            "author_id": utils.generate_md5(jerry),
-            "tweeted_at": utils.time_now(),
-            "text": tweet2,
-            "sentiment": 0,
-            "hashtags": ["#api"],
-            "retweets": [],
-            "likes": [],
-        },
-    )
-
-    db.es.indices.refresh("tweets-index")
-    db.es.indices.refresh("users-index")
-
-    return True
 
 
 class TestGetUser:
@@ -164,9 +13,9 @@ class TestGetUser:
     Test retrieve user by id.
     """
 
-    def test_nonexistent_user(self, version, client, setup_db):
+    def test_nonexistent_user(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         response = client.get(f"api/{version}/users/nonexistent")
         expected_user = dict(response.json())
@@ -174,9 +23,9 @@ class TestGetUser:
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_expected(self, version, client, setup_db):
+    def test_expected(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         testuser1_id = utils.generate_md5("johndoe")
 
@@ -195,9 +44,9 @@ class TestCreateUser:
     Test create a new user.
     """
 
-    def test_invalid_name(self, version, client, setup_db):
+    def test_invalid_name(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         # username with invalid chars
         invalid_username = "caio!@@#"
@@ -210,9 +59,9 @@ class TestCreateUser:
         assert expected_user == {}
         assert response.status_code == 400
 
-    def test_expected(self, version, client, setup_db):
+    def test_expected(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         username = "".join(random.sample("abcdefghijklmnopqrstuvxwyz", 5))
         idd = utils.generate_md5(username)
@@ -224,9 +73,9 @@ class TestCreateUser:
         assert expected_user["username"] == username
         assert response.status_code == 201
 
-    def test_existent_user(self, version, client, setup_db):
+    def test_existent_user(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         username = "johndoe"
         idd = utils.generate_md5(username)
@@ -245,9 +94,9 @@ class TestDeleteUser:
     Test delete an user.
     """
 
-    def test_nonexistent_user(self, version, client, setup_db):
+    def test_nonexistent_user(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         response = client.delete(f"api/{version}/users/nonexistent")
         expected_user = dict(response.json())
@@ -255,9 +104,9 @@ class TestDeleteUser:
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_expected(self, version, client, setup_db):
+    def test_expected(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         testuser3_id = utils.generate_md5("jerry")
 
@@ -319,9 +168,9 @@ class TestFollow:
     Test follow an user.
     """
 
-    def test_nonexistent_follower(self, version, client, setup_db):
+    def test_nonexistent_follower(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         testuser2_id = utils.generate_md5("jerry")
 
@@ -331,9 +180,9 @@ class TestFollow:
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_nonexistent_followed(self, version, client, setup_db):
+    def test_nonexistent_followed(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         testuser1_id = utils.generate_md5("johndoe")
 
@@ -343,9 +192,9 @@ class TestFollow:
         assert expected_user["id"] == testuser1_id
         assert response.status_code == 404
 
-    def test_neither_exist(self, version, client, setup_db):
+    def test_neither_exist(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         response = client.put(f"api/{version}/users/nonexistent1/follow/nonexistent2")
         expected_user = dict(response.json())
@@ -353,9 +202,9 @@ class TestFollow:
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_following_themselves(self, version, client, setup_db):
+    def test_following_themselves(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         testuser1_id = utils.generate_md5("johndoe")
 
@@ -367,9 +216,9 @@ class TestFollow:
         assert expected_user["id"] == testuser1_id
         assert response.status_code == 500
 
-    def test_expected(self, version, client, setup_db):
+    def test_expected(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         testuser1_id = utils.generate_md5("johndoe")
         testuser2_id = utils.generate_md5("jerry")
@@ -400,9 +249,9 @@ class TestUnfollow:
     Test unfollow an user.
     """
 
-    def test_nonexistent_follower(self, version, client, setup_db):
+    def test_nonexistent_follower(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         testuser4_id = utils.generate_md5("johndoe")
 
@@ -414,9 +263,9 @@ class TestUnfollow:
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_nonexistent_followed(self, version, client, setup_db):
+    def test_nonexistent_followed(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         testuser3_id = utils.generate_md5("jerry")
 
@@ -428,9 +277,9 @@ class TestUnfollow:
         assert expected_user["id"] == testuser3_id
         assert response.status_code == 404
 
-    def test_neither_exist(self, version, client, setup_db):
+    def test_neither_exist(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         response = client.put(f"api/{version}/users/nonexistent1/unfollow/nonexistent2")
         expected_user = dict(response.json())
@@ -438,9 +287,9 @@ class TestUnfollow:
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_unfollowing_themselves(self, version, client, setup_db):
+    def test_unfollowing_themselves(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         testuser3_id = utils.generate_md5("jerry")
 
@@ -452,9 +301,9 @@ class TestUnfollow:
         assert expected_user["id"] == testuser3_id
         assert response.status_code == 500
 
-    def test_expected(self, version, client, setup_db):
+    def test_expected(self, version, client, users_setup_db):
 
-        assert setup_db
+        assert users_setup_db
 
         testuser3_id = utils.generate_md5("jerry")
         testuser4_id = utils.generate_md5("johndoe")

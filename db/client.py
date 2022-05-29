@@ -1,3 +1,9 @@
 from elasticsearch import Elasticsearch
+from core import utils
 
-es = Elasticsearch("http://localhost:9200", http_auth=("elastic", "dle3222alf34=W"))
+ip = utils.get_config("elasticsearch", "ip")
+port = utils.get_config("elasticsearch", "port")
+user = utils.get_config("elasticsearch", "user")
+password = utils.get_config("elasticsearch", "password")
+
+es = Elasticsearch(f"http://{ip}:{port}", http_auth=(user, password))

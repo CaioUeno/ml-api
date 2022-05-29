@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Union
 
@@ -19,9 +20,11 @@ router = APIRouter()
 )
 def get_user(user_id: str, response: Response):
 
+    logging.info(f"Retrieve user: {user_id}.")
+
     if not db.es.exists(index=USERS_INDEX, id=user_id):
 
-        logger.error(f"User's document not found: id={user_id}")
+        logger.error(f"User's document not found: id={user_id}.")
         response.status_code = 404
 
         return {}
@@ -34,12 +37,14 @@ def get_user(user_id: str, response: Response):
 @router.post("/", response_model=Union[user.User, user.EmptyUser], status_code=201)
 def create_user(new_user: user.NewUser, response: Response):
 
+    logging.info(f"Create new user: {new_user.username}.")
+
     # validate payload
     username_validation = utils.validate_username(new_user.username)
 
     if not username_validation:
 
-        logger.error(f"Invalid username: {new_user.username}")
+        logger.error(f"Invalid username: {new_user.username}.")
         response.status_code = 400
 
         return {}
@@ -49,12 +54,13 @@ def create_user(new_user: user.NewUser, response: Response):
 
     if db.es.exists(index=USERS_INDEX, id=new_user_id):
 
-        logger.error(f"Username already exists: {new_user.username}")
+        logger.error(f"Username already exists: {new_user.username}.")
         user_document = db.es.get(index=USERS_INDEX, id=new_user_id)["_source"]
         response.status_code = 409
 
         return user_document
 
+    logging.debug(f"Instantiate new user's document.")
     # create new document otherwise
     new_user_document = {
         "id": utils.generate_md5(new_user.username),
@@ -64,7 +70,11 @@ def create_user(new_user: user.NewUser, response: Response):
         "followers": [],
     }
 
+    logging.info(f"Send request to Elasticsearch - create document.")
+    logging.debug(f"Document body: {json.dumps(new_user_document)}.")
     db.es.create(index=USERS_INDEX, id=new_user_id, body=new_user_document)
+
+    logging.debug(f"New user's document created.")
 
     return new_user_document
 
@@ -74,9 +84,11 @@ def create_user(new_user: user.NewUser, response: Response):
 )
 def delete_user(user_id: str, response: Response):
 
+    logging.info(f"Delete user: {user_id}.")
+
     if not db.es.exists(index=USERS_INDEX, id=user_id):
 
-        logger.error(f"User's document not found: {user_id}")
+        logger.error(f"User's document not found: {user_id}.")
         response.status_code = 404
 
         return {}
@@ -202,16 +214,18 @@ def delete_user(user_id: str, response: Response):
 )
 def follow(follower_id: str, followed_id: str, response: Response):
 
+    logging.info(f"User ({follower_id}) follows user ({followed_id}).")
+
     if not db.es.exists(index=USERS_INDEX, id=follower_id):
 
-        logger.error(f"User's document not found: {follower_id} (follower)")
+        logger.error(f"User's document not found: {follower_id} (follower).")
         response.status_code = 404
 
         return {}
 
     if not db.es.exists(index=USERS_INDEX, id=followed_id):
 
-        logger.error(f"User's document not found: {follower_id} (followed)")
+        logger.error(f"User's document not found: {follower_id} (followed).")
         response.status_code = 404
 
         # return follower user document
@@ -223,7 +237,7 @@ def follow(follower_id: str, followed_id: str, response: Response):
     if follower_id == followed_id:
 
         logger.error(
-            f"User can not follow themselves: follower_id ({follower_id}) == followed_id ({followed_id})"
+            f"User can not follow themselves: follower_id ({follower_id}) == followed_id ({followed_id})."
         )
         response.status_code = 500
 
@@ -236,38 +250,38 @@ def follow(follower_id: str, followed_id: str, response: Response):
     followed_at = utils.time_now()
 
     # update follower user document
-    db.es.update(
-        index=USERS_INDEX,
-        id=follower_id,
-        body={
-            "script": {
-                "source": """
+    script = {
+        "script": {
+            "source": """
                                 if (!ctx._source.follows.contains(ctx._source.follows.find(f -> f.id == params.user.id))) {
                                         ctx._source.follows.add(params.user)
                                     }
                           """,
-                "lang": "painless",
-                "params": {"user": {"id": followed_id, "followed_at": followed_at}},
-            }
-        },
-    )
+            "lang": "painless",
+            "params": {"user": {"id": followed_id, "followed_at": followed_at}},
+        }
+    }
+
+    logging.info(f"Send request to Elasticsearch - update API.")
+    logging.debug(f"Script body: {json.dumps(script)}")
+    db.es.update(index=USERS_INDEX, id=follower_id, body=script)
 
     # update followed user document
-    db.es.update(
-        index=USERS_INDEX,
-        id=followed_id,
-        body={
-            "script": {
-                "source": """
+    script = {
+        "script": {
+            "source": """
                                 if (!ctx._source.followers.contains(ctx._source.followers.find(f -> f.id == params.user.id))) {
                                         ctx._source.followers.add(params.user)
                                     }
                           """,
-                "lang": "painless",
-                "params": {"user": {"id": follower_id, "followed_at": followed_at}},
-            }
-        },
-    )
+            "lang": "painless",
+            "params": {"user": {"id": follower_id, "followed_at": followed_at}},
+        }
+    }
+
+    logging.info(f"Send request to Elasticsearch - update API.")
+    logging.debug(f"Script body: {json.dumps(script)}")
+    db.es.update(index=USERS_INDEX, id=followed_id, body=script)
 
     # return follower user document
     follower_document = db.es.get(index=USERS_INDEX, id=follower_id)["_source"]
@@ -282,16 +296,18 @@ def follow(follower_id: str, followed_id: str, response: Response):
 )
 def unfollow(follower_id: str, followed_id: str, response: Response):
 
+    logging.info(f"User ({follower_id}) unfollows user ({followed_id}).")
+
     if not db.es.exists(index=USERS_INDEX, id=follower_id):
 
-        logger.error(f"User's document not found: {follower_id} (follower)")
+        logger.error(f"User's document not found: {follower_id} (follower).")
         response.status_code = 404
 
         return {}
 
     if not db.es.exists(index=USERS_INDEX, id=followed_id):
 
-        logger.error(f"User's document not found: {followed_id} (followed)")
+        logger.error(f"User's document not found: {followed_id} (followed).")
         response.status_code = 404
 
         # return follower document
@@ -302,7 +318,7 @@ def unfollow(follower_id: str, followed_id: str, response: Response):
     if follower_id == followed_id:
 
         logger.error(
-            f"User can not unfollow themselves: follower_id ({follower_id}) == followed_id ({followed_id})"
+            f"User can not unfollow themselves: follower_id ({follower_id}) == followed_id ({followed_id})."
         )
         response.status_code = 500
 
@@ -312,34 +328,34 @@ def unfollow(follower_id: str, followed_id: str, response: Response):
         return follower_document
 
     # update follower user document
-    db.es.update(
-        index=USERS_INDEX,
-        id=follower_id,
-        body={
-            "script": {
-                "source": """
+    script = {
+        "script": {
+            "source": """
                                 ctx._source.follows.removeIf(f -> f.id == params.user.id)
                           """,
-                "lang": "painless",
-                "params": {"user": {"id": followed_id}},
-            }
-        },
-    )
+            "lang": "painless",
+            "params": {"user": {"id": followed_id}},
+        }
+    }
+
+    logging.info(f"Send request to Elasticsearch - update API.")
+    logging.debug(f"Script body: {json.dumps(script)}")
+    db.es.update(index=USERS_INDEX, id=follower_id, body=script)
 
     # update followed user document
-    db.es.update(
-        index=USERS_INDEX,
-        id=followed_id,
-        body={
-            "script": {
-                "source": """
+    script = {
+        "script": {
+            "source": """
                                 ctx._source.followers.removeIf(f -> f.id == params.user.id)
                           """,
-                "lang": "painless",
-                "params": {"user": {"id": follower_id}},
-            }
-        },
-    )
+            "lang": "painless",
+            "params": {"user": {"id": follower_id}},
+        }
+    }
+
+    logging.info(f"Send request to Elasticsearch - update API.")
+    logging.debug(f"Script body: {json.dumps(script)}")
+    db.es.update(index=USERS_INDEX, id=followed_id, body=script)
 
     # return follower user document
     follower_document = db.es.get(index=USERS_INDEX, id=follower_id)["_source"]

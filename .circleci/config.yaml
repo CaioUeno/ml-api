@@ -1,0 +1,47 @@
+version: 2.1
+
+jobs:
+  test-routes:
+    docker:
+      - image: cimg/python:3.8.10
+    environment:
+      PYTHONPATH: . 
+    steps:
+      - checkout
+      - run:
+          name: "Test routes"
+          command: |
+            pip install -r requirements.txt
+            docker-compose -d up
+            python -m pytest -v --disable-warnings --durations=0
+
+  # build-container:
+  #   docker:
+  #     - image: cimg/python:3.8.10
+  #   environment:
+  #     PROJECT_NAME: ml-api
+
+  #   steps: 
+  #     - checkout
+  #     - setup_remote_docker
+  #     - run:
+  #         name: "Build docker image"
+  #         command: |
+  #           docker build -t $DOCKER_USERNAME/$PROJECT_NAME .
+  #           echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+  #           docker push $DOCKER_USERNAME/$PROJECT_NAME:latest
+workflows:
+  main:
+    jobs:
+      - test-routes:
+          filters:
+            branches:
+              only: 
+                master
+      # - build-container:
+      #     requires:
+      #       - test-models
+      #     filters:
+      #       branches:
+      #         only: 
+      #           master

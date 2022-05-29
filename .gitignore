@@ -3,3 +3,5 @@ __pycache__/
 .env
 logs/
 .pytest_cache/
+api-config.cfg
+.coverage

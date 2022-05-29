@@ -1,153 +1,10 @@
-import json
-import db
-import pytest
 from core import utils
-from fastapi import testclient
-from main import app
-
-
-# change version to test easily
-@pytest.fixture
-def version() -> str:
-    return "v1"
-
-
-@pytest.fixture
-def client():
-    return testclient.TestClient(app)
-
-
-# setup database to keep tests independent
-@pytest.fixture
-def setup_db() -> bool:
-
-    # delete indices if they already exists
-    if db.es.indices.exists("users-index"):
-        db.es.indices.delete("users-index")
-
-    if db.es.indices.exists("tweets-index"):
-        db.es.indices.delete("tweets-index")
-
-    # load their mapping and create them
-    with open("db/mappings/users.json") as f:
-        db.es.indices.create(index="users-index", body=json.load(f))
-
-    with open("db/mappings/tweets.json") as f:
-        db.es.indices.create(index="tweets-index", body=json.load(f))
-
-    # populate them
-
-    johndoe = "johndoe"
-    jerry = "jerry"
-
-    db.es.create(
-        "users-index",
-        id=utils.generate_md5(johndoe),
-        body={
-            "id": utils.generate_md5(johndoe),
-            "username": johndoe,
-            "joined_at": utils.time_now(),
-            "follows": [
-                {
-                    "id": utils.generate_md5(jerry),
-                    "followed_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-            "followers": [
-                {
-                    "id": utils.generate_md5(jerry),
-                    "followed_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-        },
-    )
-
-    db.es.create(
-        "users-index",
-        id=utils.generate_md5(jerry),
-        body={
-            "id": utils.generate_md5(jerry),
-            "username": jerry,
-            "joined_at": utils.time_now(),
-            "follows": [
-                {
-                    "id": utils.generate_md5(johndoe),
-                    "followed_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-            "followers": [
-                {
-                    "id": utils.generate_md5(johndoe),
-                    "followed_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-        },
-    )
-
-    tweet1 = "first tweet example #api"
-    db.es.create(
-        "tweets-index",
-        id=utils.generate_md5(tweet1 + johndoe),
-        body={
-            "id": utils.generate_md5(tweet1 + johndoe),
-            "author_id": utils.generate_md5(johndoe),
-            "tweeted_at": utils.time_now(),
-            "text": tweet1,
-            "sentiment": 0,
-            "hashtags": ["#api"],
-            "retweets": [
-                {
-                    "id": utils.generate_md5(jerry),
-                    "retweeted_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-            "likes": [
-                {
-                    "id": utils.generate_md5(jerry),
-                    "liked_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-        },
-    )
-
-    # retweet
-    db.es.create(
-        "tweets-index",
-        id=utils.generate_md5(utils.generate_md5(tweet1 + johndoe) + jerry),
-        body={
-            "id": utils.generate_md5(utils.generate_md5(tweet1 + johndoe) + jerry),
-            "user_id": utils.generate_md5(jerry),
-            "referenced_at": utils.time_now(),
-            "tweet_id": utils.generate_md5(tweet1 + johndoe),
-        },
-    )
-
-    tweet2 = "second tweet example"
-    db.es.create(
-        "tweets-index",
-        id=utils.generate_md5(tweet2 + jerry),
-        body={
-            "id": utils.generate_md5(tweet2 + jerry),
-            "author_id": utils.generate_md5(jerry),
-            "tweeted_at": utils.time_now(),
-            "text": tweet2,
-            "sentiment": 0,
-            "hashtags": ["#api"],
-            "retweets": [],
-            "likes": [],
-        },
-    )
-
-    db.es.indices.refresh("tweets-index")
-    db.es.indices.refresh("users-index")
-
-    return True
 
 
 class TestGetTweetOrRetweet:
-    def test_non_existent_tweet(self, version, client, setup_db):
+    def test_non_existent_tweet(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         response = client.get(f"api/{version}/tweets/nonexistentid")
         expected_tweet = dict(response.json())
@@ -155,9 +12,9 @@ class TestGetTweetOrRetweet:
         assert expected_tweet == {}
         assert response.status_code == 404
 
-    def test_tweet_expected(self, version, client, setup_db):
+    def test_tweet_expected(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         idd = utils.generate_md5("first tweet example #api" + "johndoe")
 
@@ -169,9 +26,9 @@ class TestGetTweetOrRetweet:
         assert expected_tweet["text"] == "first tweet example #api"
         assert response.status_code == 200
 
-    def test_retweet_expected(self, version, client, setup_db):
+    def test_retweet_expected(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         idd = utils.generate_md5(
             utils.generate_md5("first tweet example #api" + "johndoe") + "jerry"
@@ -189,9 +46,9 @@ class TestGetTweetOrRetweet:
 
 
 class TestGetUserTweets:
-    def test_nonexistent_user(self, version, client, setup_db):
+    def test_nonexistent_user(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         response = client.get(f"api/{version}/tweets/user/nonexistentid")
         expected_tweets_list = list(response.json())
@@ -199,9 +56,9 @@ class TestGetUserTweets:
         assert expected_tweets_list == []
         assert response.status_code == 404
 
-    def test_expected(self, version, client, setup_db):
+    def test_expected(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         idd = utils.generate_md5("johndoe")
 
@@ -221,9 +78,9 @@ class TestGetUserTweets:
 
 
 class TestPublishTweet:
-    def test_non_existent_user(self, version, client, setup_db):
+    def test_non_existent_user(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         response = client.post(
             f"api/{version}/tweets/nonexistentid/tweet",
@@ -234,8 +91,8 @@ class TestPublishTweet:
         assert expected_tweet == {}
         assert response.status_code == 404
 
-    def test_same_text(self, version, client, setup_db):
-        assert setup_db
+    def test_same_text(self, version, client, tweets_setup_db):
+        assert tweets_setup_db
 
         idd = utils.generate_md5("johndoe")
         response = client.post(
@@ -251,9 +108,9 @@ class TestPublishTweet:
         assert expected_tweet["text"] == "first tweet example #api"
         assert response.status_code == 409
 
-    def test_expected(self, version, client, setup_db):
+    def test_expected(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         idd = utils.generate_md5("jerry")
 
@@ -269,9 +126,9 @@ class TestPublishTweet:
 
 
 class TestRetweet:
-    def test_non_existent_user(self, version, client, setup_db):
+    def test_non_existent_user(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         tweet_id = utils.generate_md5("first tweet example #api" + "johndoe")
 
@@ -281,9 +138,9 @@ class TestRetweet:
         assert expected_retweet == {}
         assert response.status_code == 404
 
-    def test_non_existent_tweet(self, version, client, setup_db):
+    def test_non_existent_tweet(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         user_id = utils.generate_md5("jerry")
 
@@ -293,9 +150,9 @@ class TestRetweet:
         assert expected_retweet == {}
         assert response.status_code == 404
 
-    def test_neither_exist(self, version, client, setup_db):
+    def test_neither_exist(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         response = client.post(
             f"api/{version}/tweets/nonexistentid/retweet/nonexistentid"
@@ -305,9 +162,9 @@ class TestRetweet:
         assert expected_retweet == {}
         assert response.status_code == 404
 
-    def test_author_retweet(self, version, client, setup_db):
+    def test_author_retweet(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         user_id = utils.generate_md5("johndoe")
         tweet_id = utils.generate_md5("first tweet example #api" + "johndoe")
@@ -318,9 +175,9 @@ class TestRetweet:
         assert expected_retweet == {}
         assert response.status_code == 500
 
-    def test_expected(self, version, client, setup_db):
+    def test_expected(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         user_id = utils.generate_md5("johndoe")
         tweet_id = utils.generate_md5("second tweet example" + "jerry")
@@ -339,9 +196,9 @@ class TestRetweet:
 
 
 class TestLikeTweet:
-    def test_non_existent_user(self, version, client, setup_db):
+    def test_non_existent_user(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         tweet_id = utils.generate_md5("first tweet example #api" + "johndoe")
 
@@ -351,9 +208,9 @@ class TestLikeTweet:
         assert expected_tweet == {}
         assert response.status_code == 404
 
-    def test_non_existent_tweet(self, version, client, setup_db):
+    def test_non_existent_tweet(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         user_id = utils.generate_md5("jerry")
 
@@ -363,9 +220,9 @@ class TestLikeTweet:
         assert expected_tweet == {}
         assert response.status_code == 404
 
-    def test_neither_exist(self, version, client, setup_db):
+    def test_neither_exist(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         response = client.post(f"api/{version}/tweets/nonexistentid/like/nonexistentid")
         expected_tweet = dict(response.json())
@@ -373,9 +230,9 @@ class TestLikeTweet:
         assert expected_tweet == {}
         assert response.status_code == 404
 
-    def test_like_retweet(self, version, client, setup_db):
+    def test_like_retweet(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         user_id = utils.generate_md5("johndoe")
         retweet_id = utils.generate_md5(
@@ -388,9 +245,9 @@ class TestLikeTweet:
         assert expected_tweet == {}
         assert response.status_code == 500
 
-    def test_expected(self, version, client, setup_db):
+    def test_expected(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         user_id = utils.generate_md5("johndoe")
         tweet_id = utils.generate_md5("second tweet example" + "jerry")
@@ -409,9 +266,9 @@ class TestLikeTweet:
 
 
 class TestDeleteTweetOrRetweet:
-    def test_non_existent_tweet(self, version, client, setup_db):
+    def test_non_existent_tweet(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         response = client.delete(f"api/{version}/tweets/nonexistentid")
         expected_tweet = dict(response.json())
@@ -419,9 +276,9 @@ class TestDeleteTweetOrRetweet:
         assert expected_tweet == {}
         assert response.status_code == 404
 
-    def test_tweet_expected(self, version, client, setup_db):
+    def test_tweet_expected(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         tweet_id = utils.generate_md5("first tweet example #api" + "johndoe")
 
@@ -441,9 +298,9 @@ class TestDeleteTweetOrRetweet:
         assert expected_retweet == {}
         assert response.status_code == 404
 
-    def test_retweet_expected(self, version, client, setup_db):
+    def test_retweet_expected(self, version, client, tweets_setup_db):
 
-        assert setup_db
+        assert tweets_setup_db
 
         retweet_id = utils.generate_md5(
             utils.generate_md5("first tweet example #api" + "johndoe") + "jerry"
