@@ -1,6 +1,6 @@
 __pycache__/
 .venv/
-.env
+# .env
 logs/
 .pytest_cache/
 api-config.cfg
