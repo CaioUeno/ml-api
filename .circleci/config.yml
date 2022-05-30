@@ -64,8 +64,6 @@ workflows:
       #         only: 
       #           master
       - build-container:
-          requires:
-            - test-models
           filters:
             branches:
               only: 
