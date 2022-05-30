@@ -1,75 +1,72 @@
 version: 2.1
 
 jobs:
-  test-routes:
-    docker:
-      - image: cimg/python:3.8.10
-    environment:
-      PYTHONPATH: .
-    steps:
-      - checkout
-      - run:
-          name: Install Docker Compose
-          environment:
-            COMPOSE_VERSION: '1.29.2'
-          command: |
-            curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o ~/docker-compose
-            chmod +x ~/docker-compose
-            sudo mv ~/docker-compose /usr/local/bin/docker-compose
-      - setup_remote_docker
-      - run:
-          name: Install Dependencies
-          command : pip install -r requirements.txt
-      - run:
-          name: Configure Machine
-          command : sysctl -w vm.max_map_count=262144 
-          
-      # - run:
-      #     name: Everything
-      #     command : |
-      #       docker-compose up -d
-      #       mkdir logs
-      #       python -m pytest -v --disable-warnings --durations=0
-      - run:
-          name: Setup Containers
-          command: docker-compose up
-      - run:
-          name: Wait Containers
-          command: sleep 45
-      - run:
-          name: Create Log Folder
-          command: mkdir logs
-      - run:
-          name: Test
-          command: python -m pytest -v --disable-warnings --durations=0
-
-  # build-container:
+  # Elasticsearch container needs to change a read-only file to start
+  # so I am not able to test routes without it.
+  # If there were a elasticsearch remote server, then I wouldn't need to
+  # use docker compose and start a local elasticsearch/kibana services.
+  # test-routes:
   #   docker:
   #     - image: cimg/python:3.8.10
   #   environment:
-  #     PROJECT_NAME: ml-api
-
-  #   steps: 
+  #     PYTHONPATH: .
+  #   steps:
   #     - checkout
+  #     - run:
+  #         name: Install Docker Compose
+  #         environment:
+  #           COMPOSE_VERSION: '1.29.2'
+  #         command: |
+  #           curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o ~/docker-compose
+  #           chmod +x ~/docker-compose
+  #           sudo mv ~/docker-compose /usr/local/bin/docker-compose
   #     - setup_remote_docker
   #     - run:
-  #         name: "Build docker image"
-  #         command: |
-  #           docker build -t $DOCKER_USERNAME/$PROJECT_NAME .
-  #           echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
-  #           docker push $DOCKER_USERNAME/$PROJECT_NAME:latest
+  #         name: Install Dependencies
+  #         command : pip install -r requirements.txt
+  #     - run:
+  #         name: Configure Machine
+  #         command : sysctl -w vm.max_map_count=262144 
+  #     - run:
+  #         name: Setup Containers
+  #         command: docker-compose up
+  #     - run:
+  #         name: Wait Containers
+  #         command: sleep 45
+  #     - run:
+  #         name: Create Log Folder
+  #         command: mkdir logs
+  #     - run:
+  #         name: Test
+  #         command: python -m pytest -v --disable-warnings --durations=0
+
+  build-container:
+    docker:
+      - image: cimg/python:3.8.10
+    environment:
+      PROJECT_NAME: ml-api
+
+    steps: 
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: "Build docker image"
+          command: |
+            docker build -t $DOCKER_USERNAME/$PROJECT_NAME .
+            echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+            docker push $DOCKER_USERNAME/$PROJECT_NAME:latest
 workflows:
   main:
     jobs:
-      - test-routes:
-          filters:
-            branches:
-              only: 
-                DEVELOPMENT
-      # - build-container:
-      #     requires:
-      #       - test-models
+      # - test-routes:
       #     filters:
       #       branches:
       #         only: 
       #           master
+      - build-container:
+          requires:
+            - test-models
+          filters:
+            branches:
+              only: 
+                master
