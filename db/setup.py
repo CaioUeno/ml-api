@@ -1,167 +1,161 @@
+import json
+
 from core import utils
 
-from db.client import es
+import db
+
+USERS_INDEX = utils.get_config("elasticsearch.indices", "users")
+TWEETS_INDEX = utils.get_config("elasticsearch.indices", "tweets")
 
 
-def init_indices() -> bool:
+def initialize_indices():
 
-    users_configs = {
-        "mappings": {
-            "properties": {
-                "id": {"type": "keyword"},
-                "username": {"type": "keyword"},
-                "joined_at": {"type": "date", "format": "yyyy-MM-dd HH:mm:ss x"},
-                "follows": {
-                    "type": "nested",
-                    "properties": {
-                        "id": {"type": "keyword"},
-                        "followed_at": {
-                            "type": "date",
-                            "format": "yyyy-MM-dd HH:mm:ss x",
-                        },
-                    },
-                },
-                "followers": {
-                    "type": "nested",
-                    "properties": {
-                        "id": {"type": "keyword"},
-                        "followed_at": {
-                            "type": "date",
-                            "format": "yyyy-MM-dd HH:mm:ss x",
-                        },
-                    },
-                },
-            }
-        }
-    }
-    tweets_configs = {
-        "mappings": {
-            "properties": {
-                "id": {"type": "keyword"},
-                "author_id": {"type": "keyword"},
-                "tweeted_at": {"type": "date", "format": "yyyy-MM-dd HH:mm:ss x"},
-                "text": {"type": "text"},
-                "sentiment": {"type": "integer"},
-                "hashtags": {"type": "keyword"},
-                "retweets": {
-                    "type": "nested",
-                    "properties": {
-                        "id": {"type": "keyword"},
-                        "retweeted_at": {
-                            "type": "date",
-                            "format": "yyyy-MM-dd HH:mm:ss x",
-                        },
-                    },
-                },
-                "likes": {
-                    "type": "nested",
-                    "properties": {
-                        "id": {"type": "keyword"},
-                        "liked_at": {"type": "date", "format": "yyyy-MM-dd HH:mm:ss x"},
-                    },
-                },
-                "user_id": {"type": "keyword"},
-                "referenced_at": {"type": "date", "format": "yyyy-MM-dd HH:mm:ss x"},
-                "tweet_id": {"type": "keyword"},
-            }
-        }
-    }
+    # delete indices if they already exists
+    if db.es.indices.exists(USERS_INDEX):
+        db.es.indices.delete(USERS_INDEX)
 
-    es.indices.create(index="users-index", body=users_configs)
-    es.indices.create(index="tweets-index", body=tweets_configs)
+    if db.es.indices.exists(TWEETS_INDEX):
+        db.es.indices.delete(TWEETS_INDEX)
 
+    # load their mapping and create them
+    with open("db/mappings/users.json") as f:
+        db.es.indices.create(index=USERS_INDEX, body=json.load(f))
 
-def close_indices():
-
-    es.indices.delete("users-index")
-    es.indices.delete("tweets-index")
+    with open("db/mappings/tweets.json") as f:
+        db.es.indices.create(index=TWEETS_INDEX, body=json.load(f))
 
 
 def populate_indices():
 
-    # test users
-    testuser1 = "testuser1"
-    es.create(
-        "users-index",
-        id=utils.generate_md5(testuser1),
-        body={
-            "id": utils.generate_md5(testuser1),
-            "username": testuser1,
-            "joined_at": utils.time_now(),
-            "follows": [],
-            "followers": [],
-        },
+    # create "johndoe" user
+    johndoe_document = {
+        "id": utils.generate_md5("johndoe"),
+        "username": "johndoe",
+        "joined_at": "2022-05-01 09:30:00 -0300",
+        "follows": [
+            {
+                "id": utils.generate_md5("terry"),
+                "followed_at": "2022-05-01 12:00:00 -0300",
+            }
+        ],
+        "followers": [],
+    }
+
+    db.es.create(index=USERS_INDEX, id=johndoe_document["id"], body=johndoe_document)
+
+    # create "terry" user
+    terry_document = {
+        "id": utils.generate_md5("terry"),
+        "username": "terry",
+        "joined_at": "2022-05-01 09:30:00 -0300",
+        "follows": [
+            {
+                "id": utils.generate_md5("caioueno"),
+                "followed_at": "2022-05-05 17:00:00 -0300",
+            }
+        ],
+        "followers": [
+            {
+                "id": utils.generate_md5("johndoe"),
+                "followed_at": "2022-05-01 12:00:00 -0300",
+            },
+            {
+                "id": utils.generate_md5("caioueno"),
+                "followed_at": "2022-05-05 18:45:00 -0300",
+            },
+        ],
+    }
+
+    db.es.create(index=USERS_INDEX, id=terry_document["id"], body=terry_document)
+
+    # create "caioueno" user
+    caioueno_document = {
+        "id": utils.generate_md5("caioueno"),
+        "username": "caioueno",
+        "joined_at": "2022-05-01 09:30:00 -0300",
+        "follows": [
+            {
+                "id": utils.generate_md5("terry"),
+                "followed_at": "2022-05-05 18:45:00 -0300",
+            }
+        ],
+        "followers": [
+            {
+                "id": utils.generate_md5("terry"),
+                "followed_at": "2022-05-05 17:00:00 -0300",
+            }
+        ],
+    }
+
+    db.es.create(index=USERS_INDEX, id=caioueno_document["id"], body=caioueno_document)
+
+    # create tweets and retweets
+    tweet_1 = {
+        "id": utils.generate_md5("First tweet! #sideproject #fastapi" + "caioueno"),
+        "author_id": utils.generate_md5("caioueno"),
+        "tweeted_at": "2022-05-02 12:45:00 -0300",
+        "text": "First tweet! #sideproject #fastapi",
+        "sentiment": 1,
+        "hashtags": ["#sideproject", "#fastapi"],
+        "retweets": [],
+        "likes": [
+            {"id": utils.generate_md5("terry"), "liked_at": "2022-05-05 22:15:00 -0300"}
+        ],
+    }
+
+    db.es.create(
+        index=TWEETS_INDEX,
+        id=tweet_1["id"],
+        body=tweet_1,
     )
 
-    testuser2 = "testuser2"
-    es.create(
-        "users-index",
-        id=utils.generate_md5(testuser2),
-        body={
-            "id": utils.generate_md5(testuser2),
-            "username": testuser2,
-            "joined_at": utils.time_now(),
-            "follows": [],
-            "followers": [],
-        },
+    tweet_2 = {
+        "id": utils.generate_md5(
+            "Awful to manually create those tweets >:c #setup #fastapi" + "caioueno"
+        ),
+        "author_id": utils.generate_md5("caioueno"),
+        "tweeted_at": "2022-05-10 20:55:00 -0300",
+        "text": "Awful to manually create those tweets >:c #setup #fastapi",
+        "sentiment": -1,
+        "hashtags": ["#setup", "#fastapi"],
+        "retweets": [],
+        "likes": [],
+    }
+
+    db.es.create(
+        index=TWEETS_INDEX,
+        id=tweet_2["id"],
+        body=tweet_2,
     )
 
-    testuser3 = "testuser3"
-    es.create(
-        "users-index",
-        id=utils.generate_md5(testuser3),
-        body={
-            "id": utils.generate_md5(testuser3),
-            "username": testuser3,
-            "joined_at": utils.time_now(),
-            "follows": [
-                {
-                    "id": utils.generate_md5("testuser4"),
-                    "followed_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-            "followers": [],
-        },
-    )
+    tweet_3 = {
+        "id": utils.generate_md5("Yeah! Almost there! #fastapi" + "terry"),
+        "author_id": utils.generate_md5("terry"),
+        "tweeted_at": "2022-05-07 03:10:00 -0300",
+        "text": "Yeah! Almost there! #fastapi",
+        "sentiment": -1,
+        "hashtags": ["#fastapi"],
+        "retweets": [
+            {
+                "id": utils.generate_md5("johndoe"),
+                "retweeted_at": "2022-05-07 03:25:00 -0300",
+            }
+        ],
+        "likes": [],
+    }
 
-    testuser4 = "testuser4"
-    es.create(
-        "users-index",
-        id=utils.generate_md5(testuser4),
-        body={
-            "id": utils.generate_md5(testuser4),
-            "username": testuser4,
-            "joined_at": utils.time_now(),
-            "follows": [],
-            "followers": [
-                {
-                    "id": utils.generate_md5(testuser3),
-                    "followed_at": "2022-05-09 19:07:03 -0300",
-                }
-            ],
-        },
-    )
-
-    # test tweet
-    tweet1 = "opa opa"
-
-    # remove time from id generation to make testing easier
-    es.create(
-        "tweets-index",
-        id=utils.generate_md5(tweet1 + testuser1),
-        body={
-            "id": utils.generate_md5(tweet1 + testuser1),
-            "author_id": utils.generate_md5(testuser1),
-            "tweeted_at": utils.time_now(),
-            "text": tweet1,
-            "sentiment": 0,
-            "hashtags": [],
-            "retweets": [],
-            "likes": [],
-        },
+    db.es.create(
+        index=TWEETS_INDEX,
+        id=tweet_3["id"],
+        body=tweet_3,
     )
 
 
-close_indices()
-init_indices()
-populate_indices()
+def main():
+
+    initialize_indices()
+    populate_indices()
+
+
+if __name__ == "__main__":
+    main()
