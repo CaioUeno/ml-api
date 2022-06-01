@@ -72,15 +72,6 @@ def get_user_tweets(user_id: str, response: Response):
         return user_tweets
 
 
-@router.get(
-    "/{user_id}/timeline",
-    response_model=List[tweet.Tweet],
-    status_code=200,
-)
-def get_user_timeline(user_id: str):
-    return NotImplementedError()
-
-
 @router.post(
     "/{user_id}/tweet",
     response_model=Union[tweet.Tweet, tweet.EmptyTweet],
