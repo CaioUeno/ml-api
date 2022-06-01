@@ -1,28 +1,29 @@
-from typing import List, Optional
+from typing import List
 from pydantic import BaseModel
 
 from core.schemas import user
 
+# error and not found
+class EmptyTweet(BaseModel):
+    pass
 
-class BaseTweet(BaseModel):
+
+# error and not found
+class EmptyReferenceTweet(BaseModel):
+    pass
+
+
+# complete retweet (as in the database)
+class ReferenceTweet(BaseModel):
     id: str
-
-
-class ReferenceTweet(BaseTweet):
     user_id: str
     referenced_at: str
     tweet_id: str
 
-class NotFoundTweet(BaseModel):
-    pass
 
-class EmptyTweet(BaseModel):
-    pass
-
-class EmptyReferenceTweet(BaseModel):
-    pass
-
-class Tweet(BaseTweet):
+# complete tweet (as in the database)
+class Tweet(BaseModel):
+    id: str
     author_id: str
     tweeted_at: str
     text: str
@@ -32,5 +33,6 @@ class Tweet(BaseTweet):
     likes: List[user.LikeUser]
 
 
+# handles the input for a new tweet
 class NewTweet(BaseModel):
     text: str
