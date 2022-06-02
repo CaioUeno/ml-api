@@ -2,6 +2,11 @@ from core import utils
 
 
 class TestClassify:
+
+    """
+    Test classify text.
+    """
+
     def test_empty_text(self, version, client, sentiment_setup_db):
 
         assert sentiment_setup_db
@@ -12,7 +17,7 @@ class TestClassify:
         assert expected_classification == {"text": ""}
         assert response.status_code == 500
 
-    def test_expected(self, version, client, sentiment_setup_db):
+    def test_main(self, version, client, sentiment_setup_db):
 
         assert sentiment_setup_db
 
@@ -27,6 +32,11 @@ class TestClassify:
 
 
 class TestQuantifyUser:
+
+    """
+    Test quantify user.
+    """
+
     def test_non_existent_user(self, version, client, sentiment_setup_db):
 
         assert sentiment_setup_db
@@ -56,9 +66,10 @@ class TestQuantifyUser:
         assert sentiment_setup_db
 
         user_id = utils.generate_md5("johndoe")
+        date_from = "2022-05-02"
 
         response = client.post(
-            f"api/{version}/sentiment/quantify/user/{user_id}?date_from=2022-05-02"
+            f"api/{version}/sentiment/quantify/user/{user_id}?date_from={date_from}"
         )
         expected_prevalence = dict(response.json())
 
@@ -71,9 +82,10 @@ class TestQuantifyUser:
         assert sentiment_setup_db
 
         user_id = utils.generate_md5("johndoe")
+        date_to = "2022-05-02"
 
         response = client.post(
-            f"api/{version}/sentiment/quantify/user/{user_id}?date_to=2022-05-02"
+            f"api/{version}/sentiment/quantify/user/{user_id}?date_to={date_to}"
         )
         expected_prevalence = dict(response.json())
 
@@ -86,9 +98,11 @@ class TestQuantifyUser:
         assert sentiment_setup_db
 
         user_id = utils.generate_md5("johndoe")
+        date_from = "2022-05-02"
+        date_to = "2022-05-03"
 
         response = client.post(
-            f"api/{version}/sentiment/quantify/user/{user_id}?date_from=2022-05-02&date_to=2022-05-03"
+            f"api/{version}/sentiment/quantify/user/{user_id}?date_from={date_from}&date_to={date_to}"
         )
         expected_prevalence = dict(response.json())
 
@@ -98,6 +112,11 @@ class TestQuantifyUser:
 
 
 class TestClassifyHashtag:
+
+    """
+    Test quantify hashtag.
+    """
+
     def test_non_existent_hashtag(self, version, client, sentiment_setup_db):
 
         assert sentiment_setup_db
@@ -132,8 +151,10 @@ class TestClassifyHashtag:
 
         assert sentiment_setup_db
 
+        date_from = "2022-05-02"
+
         response = client.post(
-            f"api/{version}/sentiment/quantify/hashtag/api?date_from=2022-05-02"
+            f"api/{version}/sentiment/quantify/hashtag/api?date_from={date_from}"
         )
         expected_prevalence = dict(response.json())
 
@@ -145,8 +166,10 @@ class TestClassifyHashtag:
 
         assert sentiment_setup_db
 
+        date_to = "2022-05-02"
+
         response = client.post(
-            f"api/{version}/sentiment/quantify/hashtag/api?date_to=2022-05-02"
+            f"api/{version}/sentiment/quantify/hashtag/api?date_to={date_to}"
         )
         expected_prevalence = dict(response.json())
 
@@ -158,8 +181,11 @@ class TestClassifyHashtag:
 
         assert sentiment_setup_db
 
+        date_from = "2022-05-02"
+        date_to = "2022-05-03"
+
         response = client.post(
-            f"api/{version}/sentiment/quantify/hashtag/api?date_from=2022-05-02&date_to=2022-05-03"
+            f"api/{version}/sentiment/quantify/hashtag/api?date_from={date_from}&date_to={date_to}"
         )
         expected_prevalence = dict(response.json())
 

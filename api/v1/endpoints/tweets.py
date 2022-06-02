@@ -81,6 +81,13 @@ def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response):
 
     logging.info(f'User ({user_id}) publishes new tweet: "{new_tweet.text}".')
 
+    if new_tweet.text == "":
+
+        logger.error(f"Tweet's text can not be empty.")
+        response.status_code = 500
+
+        return {}
+
     if not db.es.exists(index=USERS_INDEX, id=user_id):
 
         logger.error(f"User's document not found: {user_id}.")

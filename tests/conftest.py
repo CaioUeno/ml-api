@@ -6,6 +6,8 @@ from core import utils
 from fastapi import testclient
 from main import app
 
+USERS_INDEX = utils.get_config("elasticsearch.indices", "users")
+TWEETS_INDEX = utils.get_config("elasticsearch.indices", "tweets")
 
 # change version to test easily
 @pytest.fixture
@@ -22,22 +24,22 @@ def client():
 def sentiment_setup_db() -> bool:
 
     # delete indices if they already exists
-    if db.es.indices.exists("users-index"):
-        db.es.indices.delete("users-index")
+    if db.es.indices.exists(USERS_INDEX):
+        db.es.indices.delete(USERS_INDEX)
 
-    if db.es.indices.exists("tweets-index"):
-        db.es.indices.delete("tweets-index")
+    if db.es.indices.exists(TWEETS_INDEX):
+        db.es.indices.delete(TWEETS_INDEX)
 
     # load their mapping and create them
     with open("db/mappings/users.json") as f:
-        db.es.indices.create(index="users-index", body=json.load(f))
+        db.es.indices.create(index=USERS_INDEX, body=json.load(f))
 
     with open("db/mappings/tweets.json") as f:
-        db.es.indices.create(index="tweets-index", body=json.load(f))
+        db.es.indices.create(index=TWEETS_INDEX, body=json.load(f))
 
     johndoe = "johndoe"
     db.es.create(
-        "users-index",
+        USERS_INDEX,
         id=utils.generate_md5(johndoe),
         body={
             "id": utils.generate_md5(johndoe),
@@ -50,7 +52,7 @@ def sentiment_setup_db() -> bool:
 
     tweet1 = "first tweet example #api"
     db.es.create(
-        "tweets-index",
+        TWEETS_INDEX,
         id=utils.generate_md5(tweet1 + johndoe),
         body={
             "id": utils.generate_md5(tweet1 + johndoe),
@@ -66,7 +68,7 @@ def sentiment_setup_db() -> bool:
 
     tweet2 = "this is a negative example #api"
     db.es.create(
-        "tweets-index",
+        TWEETS_INDEX,
         id=utils.generate_md5(tweet2 + johndoe),
         body={
             "id": utils.generate_md5(tweet2 + johndoe),
@@ -82,7 +84,7 @@ def sentiment_setup_db() -> bool:
 
     tweet3 = "neutral? #api"
     db.es.create(
-        "tweets-index",
+        TWEETS_INDEX,
         id=utils.generate_md5(tweet3 + johndoe),
         body={
             "id": utils.generate_md5(tweet3 + johndoe),
@@ -96,8 +98,8 @@ def sentiment_setup_db() -> bool:
         },
     )
 
-    db.es.indices.refresh("tweets-index")
-    db.es.indices.refresh("users-index")
+    db.es.indices.refresh(TWEETS_INDEX)
+    db.es.indices.refresh(USERS_INDEX)
 
     return True
 
@@ -107,18 +109,18 @@ def sentiment_setup_db() -> bool:
 def tweets_setup_db() -> bool:
 
     # delete indices if they already exists
-    if db.es.indices.exists("users-index"):
-        db.es.indices.delete("users-index")
+    if db.es.indices.exists(USERS_INDEX):
+        db.es.indices.delete(USERS_INDEX)
 
-    if db.es.indices.exists("tweets-index"):
-        db.es.indices.delete("tweets-index")
+    if db.es.indices.exists(TWEETS_INDEX):
+        db.es.indices.delete(TWEETS_INDEX)
 
     # load their mapping and create them
     with open("db/mappings/users.json") as f:
-        db.es.indices.create(index="users-index", body=json.load(f))
+        db.es.indices.create(index=USERS_INDEX, body=json.load(f))
 
     with open("db/mappings/tweets.json") as f:
-        db.es.indices.create(index="tweets-index", body=json.load(f))
+        db.es.indices.create(index=TWEETS_INDEX, body=json.load(f))
 
     # populate them
 
@@ -126,7 +128,7 @@ def tweets_setup_db() -> bool:
     jerry = "jerry"
 
     db.es.create(
-        "users-index",
+        USERS_INDEX,
         id=utils.generate_md5(johndoe),
         body={
             "id": utils.generate_md5(johndoe),
@@ -148,7 +150,7 @@ def tweets_setup_db() -> bool:
     )
 
     db.es.create(
-        "users-index",
+        USERS_INDEX,
         id=utils.generate_md5(jerry),
         body={
             "id": utils.generate_md5(jerry),
@@ -171,7 +173,7 @@ def tweets_setup_db() -> bool:
 
     tweet1 = "first tweet example #api"
     db.es.create(
-        "tweets-index",
+        TWEETS_INDEX,
         id=utils.generate_md5(tweet1 + johndoe),
         body={
             "id": utils.generate_md5(tweet1 + johndoe),
@@ -197,7 +199,7 @@ def tweets_setup_db() -> bool:
 
     # retweet
     db.es.create(
-        "tweets-index",
+        TWEETS_INDEX,
         id=utils.generate_md5(utils.generate_md5(tweet1 + johndoe) + jerry),
         body={
             "id": utils.generate_md5(utils.generate_md5(tweet1 + johndoe) + jerry),
@@ -209,7 +211,7 @@ def tweets_setup_db() -> bool:
 
     tweet2 = "second tweet example"
     db.es.create(
-        "tweets-index",
+        TWEETS_INDEX,
         id=utils.generate_md5(tweet2 + jerry),
         body={
             "id": utils.generate_md5(tweet2 + jerry),
@@ -223,8 +225,8 @@ def tweets_setup_db() -> bool:
         },
     )
 
-    db.es.indices.refresh("tweets-index")
-    db.es.indices.refresh("users-index")
+    db.es.indices.refresh(TWEETS_INDEX)
+    db.es.indices.refresh(USERS_INDEX)
 
     return True
 
@@ -233,18 +235,18 @@ def tweets_setup_db() -> bool:
 def users_setup_db() -> bool:
 
     # delete indices if they already exists
-    if db.es.indices.exists("users-index"):
-        db.es.indices.delete("users-index")
+    if db.es.indices.exists(USERS_INDEX):
+        db.es.indices.delete(USERS_INDEX)
 
-    if db.es.indices.exists("tweets-index"):
-        db.es.indices.delete("tweets-index")
+    if db.es.indices.exists(TWEETS_INDEX):
+        db.es.indices.delete(TWEETS_INDEX)
 
     # load their mapping and create them
     with open("db/mappings/users.json") as f:
-        db.es.indices.create(index="users-index", body=json.load(f))
+        db.es.indices.create(index=USERS_INDEX, body=json.load(f))
 
     with open("db/mappings/tweets.json") as f:
-        db.es.indices.create(index="tweets-index", body=json.load(f))
+        db.es.indices.create(index=TWEETS_INDEX, body=json.load(f))
 
     # populate them
 
@@ -253,7 +255,7 @@ def users_setup_db() -> bool:
     josh = "josh"
 
     db.es.create(
-        "users-index",
+        USERS_INDEX,
         id=utils.generate_md5(johndoe),
         body={
             "id": utils.generate_md5(johndoe),
@@ -270,7 +272,7 @@ def users_setup_db() -> bool:
     )
 
     db.es.create(
-        "users-index",
+        USERS_INDEX,
         id=utils.generate_md5(jerry),
         body={
             "id": utils.generate_md5(jerry),
@@ -292,7 +294,7 @@ def users_setup_db() -> bool:
     )
 
     db.es.create(
-        "users-index",
+        USERS_INDEX,
         id=utils.generate_md5(josh),
         body={
             "id": utils.generate_md5(josh),
@@ -310,7 +312,7 @@ def users_setup_db() -> bool:
 
     tweet1 = "first tweet example #api"
     db.es.create(
-        "tweets-index",
+        TWEETS_INDEX,
         id=utils.generate_md5(tweet1 + johndoe),
         body={
             "id": utils.generate_md5(tweet1 + johndoe),
@@ -336,7 +338,7 @@ def users_setup_db() -> bool:
 
     # retweet
     db.es.create(
-        "tweets-index",
+        TWEETS_INDEX,
         id=utils.generate_md5(utils.generate_md5(tweet1 + johndoe) + jerry),
         body={
             "id": utils.generate_md5(utils.generate_md5(tweet1 + johndoe) + jerry),
@@ -348,7 +350,7 @@ def users_setup_db() -> bool:
 
     tweet2 = "second tweet example"
     db.es.create(
-        "tweets-index",
+        TWEETS_INDEX,
         id=utils.generate_md5(tweet2 + jerry),
         body={
             "id": utils.generate_md5(tweet2 + jerry),
@@ -362,7 +364,7 @@ def users_setup_db() -> bool:
         },
     )
 
-    db.es.indices.refresh("tweets-index")
-    db.es.indices.refresh("users-index")
+    db.es.indices.refresh(TWEETS_INDEX)
+    db.es.indices.refresh(USERS_INDEX)
 
     return True

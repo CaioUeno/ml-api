@@ -1,10 +1,6 @@
 import random
+
 from core import utils
-
-
-
-
-# setup database to keep tests independent
 
 
 class TestGetUser:
@@ -23,13 +19,12 @@ class TestGetUser:
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_expected(self, version, client, users_setup_db):
+    def test_main(self, version, client, users_setup_db):
 
         assert users_setup_db
 
         testuser1_id = utils.generate_md5("johndoe")
 
-        # get testuser1
         response = client.get(f"api/{version}/users/{testuser1_id}")
         expected_user = dict(response.json())
 
@@ -44,12 +39,25 @@ class TestCreateUser:
     Test create a new user.
     """
 
+    def test_null_name(self, version, client, users_setup_db):
+
+        assert users_setup_db
+
+        # username as empty string
+        empty_string = ""
+
+        response = client.post(f"api/{version}/users/", json={"username": empty_string})
+        expected_user = dict(response.json())
+
+        assert expected_user == {}
+        assert response.status_code == 500
+
     def test_invalid_name(self, version, client, users_setup_db):
 
         assert users_setup_db
 
         # username with invalid chars
-        invalid_username = "caio!@@#"
+        invalid_username = "c4io!@@#"
 
         response = client.post(
             f"api/{version}/users/", json={"username": invalid_username}
@@ -57,9 +65,25 @@ class TestCreateUser:
         expected_user = dict(response.json())
 
         assert expected_user == {}
-        assert response.status_code == 400
+        assert response.status_code == 500
 
-    def test_expected(self, version, client, users_setup_db):
+    def test_existent_username(self, version, client, users_setup_db):
+
+        assert users_setup_db
+
+        existent_username = "johndoe"
+        idd = utils.generate_md5(existent_username)
+
+        response = client.post(
+            f"api/{version}/users/", json={"username": existent_username}
+        )
+        expected_user = dict(response.json())
+
+        assert expected_user["id"] == idd
+        assert expected_user["username"] == existent_username
+        assert response.status_code == 409
+
+    def test_main(self, version, client, users_setup_db):
 
         assert users_setup_db
 
@@ -72,20 +96,6 @@ class TestCreateUser:
         assert expected_user["id"] == idd
         assert expected_user["username"] == username
         assert response.status_code == 201
-
-    def test_existent_user(self, version, client, users_setup_db):
-
-        assert users_setup_db
-
-        username = "johndoe"
-        idd = utils.generate_md5(username)
-
-        response = client.post(f"api/{version}/users/", json={"username": username})
-        expected_user = dict(response.json())
-
-        assert expected_user["id"] == idd
-        assert expected_user["username"] == username
-        assert response.status_code == 409
 
 
 class TestDeleteUser:
@@ -104,47 +114,54 @@ class TestDeleteUser:
         assert expected_user == {}
         assert response.status_code == 404
 
-    def test_expected(self, version, client, users_setup_db):
+    def test_main(self, version, client, users_setup_db):
 
         assert users_setup_db
 
-        testuser3_id = utils.generate_md5("jerry")
+        jerry_id = utils.generate_md5("jerry")
 
-        response = client.delete(f"api/{version}/users/{testuser3_id}")
+        response = client.delete(f"api/{version}/users/{jerry_id}")
         expected_user = dict(response.json())
 
-        assert expected_user["id"] == testuser3_id
+        assert expected_user["id"] == jerry_id
         assert expected_user["username"] == "jerry"
         assert expected_user["follows"] == []
         assert expected_user["followers"] == []
         assert response.status_code == 200
 
         # check if followers and who jerry followed were updated as well
-
-        response = client.get(f"api/{version}/users/{utils.generate_md5('johndoe')}")
+        ## check if jerry was removed from johndoe followers list
+        johndoe_id = utils.generate_md5("johndoe")
+        response = client.get(f"api/{version}/users/{johndoe_id}")
         expected_user = dict(response.json())
 
         followers_users_ids = [item["id"] for item in expected_user["followers"]]
-        assert utils.generate_md5("johndoe") not in followers_users_ids
 
-        response = client.get(f"api/{version}/users/{utils.generate_md5('josh')}")
+        assert jerry_id not in followers_users_ids
+
+        ## check if jerry was removed from josh follows list
+        josh_id = utils.generate_md5("josh")
+        response = client.get(f"api/{version}/users/{josh_id}")
         expected_user = dict(response.json())
 
         follows_users_ids = [item["id"] for item in expected_user["follows"]]
-        assert utils.generate_md5("johndoe") not in follows_users_ids
+
+        assert jerry_id not in follows_users_ids
 
         # check if tweets and retweets were deleted as well
-        response = client.get(
-            f"api/{version}/tweets/{utils.generate_md5('second tweet example' + 'jerry')}"
-        )
+        ## check if tweet was deleted
+        tweet_id = utils.generate_md5("second tweet example" + "jerry")
+        response = client.get(f"api/{version}/tweets/{tweet_id}")
         expected_tweet = dict(response.json())
 
         assert expected_tweet == {}
         assert response.status_code == 404
 
-        response = client.get(
-            f"api/{version}/tweets/{utils.generate_md5(utils.generate_md5('first tweet example #api' + 'johndoe') + 'jerry')}"
+        ## check if retweet was deleted - and if its original tweet updated
+        retweet_id = utils.generate_md5(
+            utils.generate_md5("first tweet example #api" + "johndoe") + "jerry"
         )
+        response = client.get(f"api/{version}/tweets/{retweet_id}")
         expected_retweet = dict(response.json())
 
         assert expected_retweet == {}
@@ -158,8 +175,8 @@ class TestDeleteUser:
         retweets_users_ids = [item["id"] for item in expected_tweet["retweets"]]
         likes_users_ids = [item["id"] for item in expected_tweet["likes"]]
 
-        assert utils.generate_md5("jerry") not in retweets_users_ids
-        assert utils.generate_md5("jerry") not in likes_users_ids
+        assert jerry_id not in retweets_users_ids
+        assert jerry_id not in likes_users_ids
 
 
 class TestFollow:
@@ -172,9 +189,9 @@ class TestFollow:
 
         assert users_setup_db
 
-        testuser2_id = utils.generate_md5("jerry")
+        jerry_id = utils.generate_md5("jerry")
 
-        response = client.put(f"api/{version}/users/nonexistent/follow/{testuser2_id}")
+        response = client.put(f"api/{version}/users/nonexistent/follow/{jerry_id}")
         expected_user = dict(response.json())
 
         assert expected_user == {}
@@ -184,12 +201,12 @@ class TestFollow:
 
         assert users_setup_db
 
-        testuser1_id = utils.generate_md5("johndoe")
+        johndoe_id = utils.generate_md5("johndoe")
 
-        response = client.put(f"api/{version}/users/{testuser1_id}/follow/nonexistent")
+        response = client.put(f"api/{version}/users/{johndoe_id}/follow/nonexistent")
         expected_user = dict(response.json())
 
-        assert expected_user["id"] == testuser1_id
+        assert expected_user["id"] == johndoe_id
         assert response.status_code == 404
 
     def test_neither_exist(self, version, client, users_setup_db):
@@ -206,41 +223,37 @@ class TestFollow:
 
         assert users_setup_db
 
-        testuser1_id = utils.generate_md5("johndoe")
+        johndoe_id = utils.generate_md5("johndoe")
 
-        response = client.put(
-            f"api/{version}/users/{testuser1_id}/follow/{testuser1_id}"
-        )
+        response = client.put(f"api/{version}/users/{johndoe_id}/follow/{johndoe_id}")
         expected_user = dict(response.json())
 
-        assert expected_user["id"] == testuser1_id
+        assert expected_user["id"] == johndoe_id
         assert response.status_code == 500
 
-    def test_expected(self, version, client, users_setup_db):
+    def test_main(self, version, client, users_setup_db):
 
         assert users_setup_db
 
-        testuser1_id = utils.generate_md5("johndoe")
-        testuser2_id = utils.generate_md5("jerry")
+        johndoe_id = utils.generate_md5("johndoe")
+        jerry_id = utils.generate_md5("jerry")
 
-        response = client.put(
-            f"api/{version}/users/{testuser1_id}/follow/{testuser2_id}"
-        )
+        response = client.put(f"api/{version}/users/{johndoe_id}/follow/{jerry_id}")
         expected_user = dict(response.json())
 
         follow_users_ids = [item["id"] for item in expected_user["follows"]]
 
-        assert expected_user["id"] == testuser1_id
-        assert testuser2_id in follow_users_ids
+        assert expected_user["id"] == johndoe_id
+        assert jerry_id in follow_users_ids
         assert response.status_code == 200
 
         # check if testuser2 document was updated as well
-        response = client.get(f"api/{version}/users/{testuser2_id}")
+        response = client.get(f"api/{version}/users/{jerry_id}")
         expected_user = dict(response.json())
 
         followers_users_ids = [item["id"] for item in expected_user["followers"]]
 
-        assert testuser1_id in followers_users_ids
+        assert johndoe_id in followers_users_ids
 
 
 class TestUnfollow:
@@ -253,11 +266,9 @@ class TestUnfollow:
 
         assert users_setup_db
 
-        testuser4_id = utils.generate_md5("johndoe")
+        johndoe_id = utils.generate_md5("johndoe")
 
-        response = client.put(
-            f"api/{version}/users/nonexistent/unfollow/{testuser4_id}"
-        )
+        response = client.put(f"api/{version}/users/nonexistent/unfollow/{johndoe_id}")
         expected_user = dict(response.json())
 
         assert expected_user == {}
@@ -267,14 +278,12 @@ class TestUnfollow:
 
         assert users_setup_db
 
-        testuser3_id = utils.generate_md5("jerry")
+        jerry_id = utils.generate_md5("jerry")
 
-        response = client.put(
-            f"api/{version}/users/{testuser3_id}/unfollow/nonexistent"
-        )
+        response = client.put(f"api/{version}/users/{jerry_id}/unfollow/nonexistent")
         expected_user = dict(response.json())
 
-        assert expected_user["id"] == testuser3_id
+        assert expected_user["id"] == jerry_id
         assert response.status_code == 404
 
     def test_neither_exist(self, version, client, users_setup_db):
@@ -291,38 +300,34 @@ class TestUnfollow:
 
         assert users_setup_db
 
-        testuser3_id = utils.generate_md5("jerry")
+        jerry_id = utils.generate_md5("jerry")
 
-        response = client.put(
-            f"api/{version}/users/{testuser3_id}/unfollow/{testuser3_id}"
-        )
+        response = client.put(f"api/{version}/users/{jerry_id}/unfollow/{jerry_id}")
         expected_user = dict(response.json())
 
-        assert expected_user["id"] == testuser3_id
+        assert expected_user["id"] == jerry_id
         assert response.status_code == 500
 
-    def test_expected(self, version, client, users_setup_db):
+    def test_main(self, version, client, users_setup_db):
 
         assert users_setup_db
 
-        testuser3_id = utils.generate_md5("jerry")
-        testuser4_id = utils.generate_md5("johndoe")
+        jerry_id = utils.generate_md5("jerry")
+        johndoe_id = utils.generate_md5("johndoe")
 
-        response = client.put(
-            f"api/{version}/users/{testuser3_id}/unfollow/{testuser4_id}"
-        )
+        response = client.put(f"api/{version}/users/{jerry_id}/unfollow/{johndoe_id}")
         expected_user = dict(response.json())
 
         follow_users_ids = [item["id"] for item in expected_user["follows"]]
 
-        assert expected_user["id"] == testuser3_id
-        assert testuser4_id not in follow_users_ids
+        assert expected_user["id"] == jerry_id
+        assert johndoe_id not in follow_users_ids
         assert response.status_code == 200
 
         # check if testuser2 document was updated as well
-        response = client.get(f"api/{version}/users/{testuser4_id}")
+        response = client.get(f"api/{version}/users/{johndoe_id}")
         expected_user = dict(response.json())
 
         followers_users_ids = [item["id"] for item in expected_user["followers"]]
 
-        assert testuser3_id not in followers_users_ids
+        assert jerry_id not in followers_users_ids

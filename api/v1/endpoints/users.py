@@ -45,7 +45,7 @@ def create_user(new_user: user.NewUser, response: Response):
     if not username_validation:
 
         logger.error(f"Invalid username: {new_user.username}.")
-        response.status_code = 400
+        response.status_code = 500
 
         return {}
 
@@ -60,23 +60,23 @@ def create_user(new_user: user.NewUser, response: Response):
 
         return user_document
 
-    logging.debug(f"Instantiate new user's document.")
     # create new document otherwise
-    new_user_document = {
-        "id": utils.generate_md5(new_user.username),
-        "username": new_user.username,
-        "joined_at": utils.time_now(),
-        "follows": [],
-        "followers": [],
-    }
+    logging.debug(f"Instantiate new user's document.")
+    new_user_d = user.User(
+        id=utils.generate_md5(new_user.username),
+        username=new_user.username,
+        joined_at=utils.time_now(),
+        follows=[],
+        followers=[],
+    )
 
     logging.info(f"Send request to Elasticsearch - create document.")
-    logging.debug(f"Document body: {json.dumps(new_user_document)}.")
-    db.es.create(index=USERS_INDEX, id=new_user_id, body=new_user_document)
+    logging.debug(f"Document body: {json.dumps(new_user_d.dict())}.")
+    db.es.create(index=USERS_INDEX, id=new_user_d.id, body=new_user_d.dict())
 
     logging.debug(f"New user's document created.")
 
-    return new_user_document
+    return new_user_d.dict()
 
 
 @router.delete(
