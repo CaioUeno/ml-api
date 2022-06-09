@@ -1,1 +1,2 @@
-from ml.models.Dummy import Dummy
+from ml.models.Dummy import dummy
+from ml.models.BoW import bow
