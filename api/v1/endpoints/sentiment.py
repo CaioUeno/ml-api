@@ -32,9 +32,8 @@ def classify_text(instance: mlio.InInstance, response: Response):
 
         return instance
 
-    logging.debug("Instantiate classifier and predict text.")
-    clf = ml.Dummy()
-    pred_sentiment = clf.single_prediction(instance.text)
+    logging.debug("Predict text.")
+    pred_sentiment = ml.bow.predict([instance.text])[0]
 
     logging.debug("Instantiate response model.")
     out = mlio.PredictedSentiment(

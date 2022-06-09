@@ -112,9 +112,6 @@ def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response):
 
         return tweet_document
 
-    logging.debug(f"Instantiate classifier and predict new text.")
-    clf = ml.Dummy()
-
     logging.debug(f"Instantiate new tweet's document.")
     # new tweet!
     new_tweet = tweet.Tweet(
@@ -122,7 +119,7 @@ def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response):
         author_id=user_document["id"],
         tweeted_at=utils.time_now(),
         text=new_tweet.text,
-        sentiment=clf.single_prediction(new_tweet.text),
+        sentiment=ml.bow.predict([new_tweet.text])[0],
         hashtags=utils.extract_hashtags(new_tweet.text),
         retweets=[],
         likes=[],
