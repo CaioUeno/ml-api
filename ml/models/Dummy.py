@@ -1,10 +1,13 @@
 import random
-import numpy as np
+from typing import List
 
 
 class Dummy:
-    def __init__(self, n_classes: int = 2):
-        self.n_classes = n_classes
+    def __init__(self):
+        pass
 
-    def single_prediction(self, text: str) -> int:
-        return random.randint(-1, 1)
+    def predict(self, texts: List[str]) -> List[int]:
+        return [random.randint(-1, 1) for text in texts]
+
+
+dummy = Dummy()

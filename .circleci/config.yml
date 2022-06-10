@@ -4,8 +4,8 @@ jobs:
 
   # Elasticsearch container needs to change a read-only file to start
   # so I am not able to test routes without it.
-  # If there were a elasticsearch remote server, then I wouldn't need to
-  # use docker compose and start a local elasticsearch/kibana services.
+  # If there was an elasticsearch remote server, then I wouldn't need to
+  # use docker compose and start local elasticsearch/kibana services.
   # test-routes:
   #   docker:
   #     - image: cimg/python:3.8.10
@@ -39,8 +39,12 @@ jobs:
   #         command: mkdir logs
   #     - run:
   #         name: Test
-  #         command: python -m pytest -v --disable-warnings --durations=0
-
+  #         command: python -m pytest -vv --disable-warnings --durations=0
+  #     - run:
+  #         name: Coverage
+  #         command: |
+  #           coverage run -m pytest
+  #           coverage report
   build-container:
     docker:
       - image: cimg/python:3.8.10

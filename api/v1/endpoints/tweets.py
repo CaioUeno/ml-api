@@ -72,15 +72,6 @@ def get_user_tweets(user_id: str, response: Response):
         return user_tweets
 
 
-@router.get(
-    "/{user_id}/timeline",
-    response_model=List[tweet.Tweet],
-    status_code=200,
-)
-def get_user_timeline(user_id: str):
-    return NotImplementedError()
-
-
 @router.post(
     "/{user_id}/tweet",
     response_model=Union[tweet.Tweet, tweet.EmptyTweet],
@@ -89,6 +80,13 @@ def get_user_timeline(user_id: str):
 def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response):
 
     logging.info(f'User ({user_id}) publishes new tweet: "{new_tweet.text}".')
+
+    if new_tweet.text == "":
+
+        logger.error(f"Tweet's text can not be empty.")
+        response.status_code = 500
+
+        return {}
 
     if not db.es.exists(index=USERS_INDEX, id=user_id):
 
@@ -114,9 +112,6 @@ def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response):
 
         return tweet_document
 
-    logging.debug(f"Instantiate classifier and predict new text.")
-    clf = ml.Dummy()
-
     logging.debug(f"Instantiate new tweet's document.")
     # new tweet!
     new_tweet = tweet.Tweet(
@@ -124,7 +119,7 @@ def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response):
         author_id=user_document["id"],
         tweeted_at=utils.time_now(),
         text=new_tweet.text,
-        sentiment=clf.single_prediction(new_tweet.text),
+        sentiment=ml.bow.predict([new_tweet.text])[0],
         hashtags=utils.extract_hashtags(new_tweet.text),
         retweets=[],
         likes=[],

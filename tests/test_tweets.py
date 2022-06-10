@@ -2,6 +2,11 @@ from core import utils
 
 
 class TestGetTweetOrRetweet:
+
+    """
+    Test retrieve tweet (or retweet) by id.
+    """
+
     def test_non_existent_tweet(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
@@ -12,32 +17,32 @@ class TestGetTweetOrRetweet:
         assert expected_tweet == {}
         assert response.status_code == 404
 
-    def test_tweet_expected(self, version, client, tweets_setup_db):
+    def test_tweet_main(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
 
-        idd = utils.generate_md5("first tweet example #api" + "johndoe")
+        tweet_id = utils.generate_md5("first tweet example #api" + "johndoe")
 
-        response = client.get(f"api/{version}/tweets/{idd}")
+        response = client.get(f"api/{version}/tweets/{tweet_id}")
         expected_tweet = dict(response.json())
 
-        assert expected_tweet["id"] == idd
+        assert expected_tweet["id"] == tweet_id
         assert expected_tweet["author_id"] == utils.generate_md5("johndoe")
         assert expected_tweet["text"] == "first tweet example #api"
         assert response.status_code == 200
 
-    def test_retweet_expected(self, version, client, tweets_setup_db):
+    def test_retweet_main(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
 
-        idd = utils.generate_md5(
+        retweet_id = utils.generate_md5(
             utils.generate_md5("first tweet example #api" + "johndoe") + "jerry"
         )
 
-        response = client.get(f"api/{version}/tweets/{idd}")
+        response = client.get(f"api/{version}/tweets/{retweet_id}")
         expected_retweet = dict(response.json())
 
-        assert expected_retweet["id"] == idd
+        assert expected_retweet["id"] == retweet_id
         assert expected_retweet["user_id"] == utils.generate_md5("jerry")
         assert expected_retweet["tweet_id"] == utils.generate_md5(
             "first tweet example #api" + "johndoe"
@@ -46,6 +51,11 @@ class TestGetTweetOrRetweet:
 
 
 class TestGetUserTweets:
+
+    """
+    Test retrieve tweet from an user id.
+    """
+
     def test_nonexistent_user(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
@@ -56,28 +66,27 @@ class TestGetUserTweets:
         assert expected_tweets_list == []
         assert response.status_code == 404
 
-    def test_expected(self, version, client, tweets_setup_db):
+    def test_main(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
 
-        idd = utils.generate_md5("johndoe")
+        johndoe_id = utils.generate_md5("johndoe")
 
-        response = client.get(f"api/{version}/tweets/user/{idd}")
+        response = client.get(f"api/{version}/tweets/user/{johndoe_id}")
         print(response.json())
         expected_tweets_list = response.json()
 
         assert len(expected_tweets_list) == 1
-        assert all([tweet["author_id"] == idd for tweet in expected_tweets_list])
+        assert all([tweet["author_id"] == johndoe_id for tweet in expected_tweets_list])
         assert response.status_code == 200
 
 
-# def test_get_user_timeline():
-
-#     response = client.get(f"api/v1/tweets/{utils.generate_md5('testuser2')}/timeline")
-#     docs = list(response.json())
-
-
 class TestPublishTweet:
+
+    """
+    Test publish a tweet.
+    """
+
     def test_non_existent_user(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
@@ -91,41 +100,61 @@ class TestPublishTweet:
         assert expected_tweet == {}
         assert response.status_code == 404
 
-    def test_same_text(self, version, client, tweets_setup_db):
+    def test_empty_string(self, version, client, tweets_setup_db):
+
         assert tweets_setup_db
 
-        idd = utils.generate_md5("johndoe")
+        johndoe_id = utils.generate_md5("johndoe")
         response = client.post(
-            f"api/{version}/tweets/{idd}/tweet",
-            json={"text": "first tweet example #api"},
+            f"api/{version}/tweets/{johndoe_id}/tweet",
+            json={"text": ""},
         )
         expected_tweet = dict(response.json())
-        print(expected_tweet)
-        assert expected_tweet["id"] == utils.generate_md5(
-            "first tweet example #api" + "johndoe"
-        )
-        assert expected_tweet["author_id"] == utils.generate_md5("johndoe")
-        assert expected_tweet["text"] == "first tweet example #api"
-        assert response.status_code == 409
 
-    def test_expected(self, version, client, tweets_setup_db):
+        assert expected_tweet == {}
+        assert response.status_code == 500
+
+    def test_same_text(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
 
-        idd = utils.generate_md5("jerry")
+        johndoe_id = utils.generate_md5("johndoe")
+        tweet_text = "first tweet example #api"
 
         response = client.post(
-            f"api/{version}/tweets/{idd}/tweet",
+            f"api/{version}/tweets/{johndoe_id}/tweet",
+            json={"text": tweet_text},
+        )
+        expected_tweet = dict(response.json())
+
+        assert expected_tweet["id"] == utils.generate_md5(tweet_text + "johndoe")
+        assert expected_tweet["author_id"] == johndoe_id
+        assert expected_tweet["text"] == tweet_text
+        assert response.status_code == 409
+
+    def test_main(self, version, client, tweets_setup_db):
+
+        assert tweets_setup_db
+
+        jerry_id = utils.generate_md5("jerry")
+
+        response = client.post(
+            f"api/{version}/tweets/{jerry_id}/tweet",
             json={"text": "new tweet example"},
         )
         expected_tweet = dict(response.json())
 
-        assert expected_tweet["author_id"] == utils.generate_md5("jerry")
+        assert expected_tweet["author_id"] == jerry_id
         assert expected_tweet["text"] == "new tweet example"
         assert response.status_code == 201
 
 
 class TestRetweet:
+
+    """
+    Test retweet.
+    """
+
     def test_non_existent_user(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
@@ -175,7 +204,7 @@ class TestRetweet:
         assert expected_retweet == {}
         assert response.status_code == 500
 
-    def test_expected(self, version, client, tweets_setup_db):
+    def test_main(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
 
@@ -196,6 +225,11 @@ class TestRetweet:
 
 
 class TestLikeTweet:
+
+    """
+    Test Like a tweet.
+    """
+
     def test_non_existent_user(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
@@ -245,7 +279,7 @@ class TestLikeTweet:
         assert expected_tweet == {}
         assert response.status_code == 500
 
-    def test_expected(self, version, client, tweets_setup_db):
+    def test_main(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
 
@@ -266,6 +300,11 @@ class TestLikeTweet:
 
 
 class TestDeleteTweetOrRetweet:
+
+    """
+    Test delete tweet (or retweet) by id.
+    """
+
     def test_non_existent_tweet(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
@@ -276,7 +315,7 @@ class TestDeleteTweetOrRetweet:
         assert expected_tweet == {}
         assert response.status_code == 404
 
-    def test_tweet_expected(self, version, client, tweets_setup_db):
+    def test_tweet_main(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
 
@@ -298,7 +337,7 @@ class TestDeleteTweetOrRetweet:
         assert expected_retweet == {}
         assert response.status_code == 404
 
-    def test_retweet_expected(self, version, client, tweets_setup_db):
+    def test_retweet_main(self, version, client, tweets_setup_db):
 
         assert tweets_setup_db
 

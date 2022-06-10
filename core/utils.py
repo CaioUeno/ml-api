@@ -2,30 +2,49 @@ import hashlib
 import re
 from configparser import RawConfigParser
 from datetime import datetime, timedelta
-from typing import List
+from typing import Any, List
 
 
 def time_now() -> str:
+    """Returns UTC datetime as string considering the timezone."""
     return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %z")
 
 
 def expand_date(date: str, increment: bool = False) -> str:
 
-    if increment:
-        return (
-            (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1))
-            .astimezone()
-            .strftime("%Y-%m-%d %H:%M:%S %z")
-        )
+    """
+    Add time (hour, minute, second and timezone) to a date-only string. If increment=True then add 1 day to the parsed date.
+    To use a date as a filter when querying Elasticsearch, date strings must match the index date format.
 
-    return (
-        datetime.strptime(date, "%Y-%m-%d")
-        .astimezone()
-        .strftime("%Y-%m-%d %H:%M:%S %z")
-    )
+    Arguments:
+        date (str): string represeting a date without time (2022-01-01);
+        increment (bool, optional): whether to increment a day or not. Defaults to False.
+
+    Returns:
+        str: string representation of the date with time information.
+    """
+
+    as_datetime_obj = datetime.strptime(date, "%Y-%m-%d")
+
+    if increment:
+        as_datetime_obj = as_datetime_obj + timedelta(days=1)
+
+    return as_datetime_obj.astimezone().strftime("%Y-%m-%d %H:%M:%S %z")
 
 
 def date_filter(date_from: str, date_to: str) -> dict:
+
+    """
+    Parse date range to a DSL clause (Elasticsearch query).
+    It increments the date_to to include the entire day.
+
+    Arguments:
+        date_from (str): date-only (no hour, minute, second and timezone) string represeting the lower date;
+        date_to (str): date-only (no hour, minute, second and timezone) string represeting the higher date.
+
+    Returns:
+        dict: DSL date range clause.
+    """
 
     if date_from is None and date_to is None:
         return None
@@ -47,14 +66,26 @@ def date_filter(date_from: str, date_to: str) -> dict:
 
 
 def generate_md5(string: str) -> str:
+    """Generate the md5 of a string."""
     return hashlib.md5(string.encode()).hexdigest()
 
 
 def extract_hashtags(text: str) -> List[str]:
+    """Extract hashtags from a text."""
     return re.findall(r"#[a-zA-Z]+", text)
 
 
 def validate_username(text: str) -> bool:
+
+    """
+    Validate an username. It must start with a letter followed by letters and numbers only.
+
+    Arguments:
+        text (str): desired username.
+
+    Returns:
+        bool: whether username is valid or not.
+    """
 
     # first char must be a word, then words or numbers
     pattern = re.compile(r"[a-zA-Z]+[a-zA-Z0-9]+")
@@ -62,9 +93,9 @@ def validate_username(text: str) -> bool:
     # pattern matched
     if pattern.match(text):
 
-        # check if fully or partially matched
         (_, end) = pattern.match(text).span(0)
 
+        # check if fully matched
         if end == len(text):
             return True
 
@@ -76,7 +107,22 @@ def sentiment_to_str(sentiment: int) -> str:
     return mapping[sentiment]
 
 
-def get_config(section: str, key: str):
+def get_config(section: str, key: str) -> Any:
+
+    """
+    Read value from configuration file(.cfg).
+
+    Arguments:
+        section (str): section name from file;
+        key (str): key name to extract value.
+
+    Raises:
+        KeyError: If section name does not exist;
+        KeyError: If key name does not exist;
+
+    Returns:
+        Any: value from section/key provided.
+    """
 
     config = RawConfigParser()
     config.read("api.cfg")
