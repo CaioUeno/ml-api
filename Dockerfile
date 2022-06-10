@@ -11,6 +11,7 @@ COPY api.cfg api.cfg
 COPY logging.conf logging.conf
 COPY main.py main.py
 COPY requirements.txt requirements.txt
+COPY mnb.sav mnb.sav
 
 # install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
