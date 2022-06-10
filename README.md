@@ -64,6 +64,8 @@ The *db/setup.py* creates the necessary indices and populates them with examples
 
 ## Machine Learning
 
+I implemented a machine learning task (**sentiment classification**) inside the API. It classifies every tweet published in three possible classes (negative, neutral or positive). The only model I trained is a [Multinomial Naive Bayes](https://scikit-learn.org/stable/modules/generated/sklearn.naive_bayes.MultinomialNB.html#sklearn.naive_bayes.MultinomialNB) using as input a Bag-of-Words representation ([CountVectorizer](https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.CountVectorizer.html?highlight=countvectorizer#sklearn.feature_extraction.text.CountVectorizer)). You can check the training step in the script *train_model.py* as well as the data in *twitter_training.csv* file.
+
 ## Log
 
 The logging is configured in the **logging.conf** file. It creates a file for every hour of activity in the *logs* folder.
@@ -76,7 +78,22 @@ I set up the tests using the [pytest framework](https://docs.pytest.org/en/7.1.x
 * **test_tweeets**: contains tests for routes regarding operations on users;
 * **test_sentiment**: contains tests for routes regarding classification and quantification routes.
 
+To run the tests use:
+
+```bash
+python3 -m pytest -vv --disable-warnings -durations=0
+```
+
 ### .coveragerc
+
+Configuration file for the test coverage. To see the coverage report run:
+
+```bash
+# generate report
+coverage run -m pytest
+# show report
+coverage report
+```
 
 ## Configuration Files
 
@@ -92,8 +109,37 @@ File to store general information for the API to access: elasticsearch secrets, 
 
 ### docker-compose.yml
 
-It sets up the Elasticsearch and Kibana containers. References: [official documentation](https://www.elastic.co/guide/en/elasticsearch/reference/7.9/docker.html) and [github repository](https://github.com/justmeandopensource/elk/blob/master/docker/docker-compose-v7.9.2.yml).
+It sets up the Elasticsearch and Kibana containers. References: [official documentation](https://www.elastic.co/guide/en/elasticsearch/reference/7.9/docker.html) and [github repository](https://github.com/justmeandopensource/elk/blob/master/docker/docker-compose-v7.9.2.yml). To run those containers, simply run:
+
+```bash
+# use the -d flag at the end if you want them to run in the background
+sudo docker-compose up
+```
 
 ### Dockerfile
 
 File to build the API container.
+
+```bash
+# build the image
+sudo docker build -t caiolueno/ml-api .
+# publish the image in the repository
+sudo docker push caiolueno/ml-api:latest
+# run the API in the container
+sudo docker run --network=host -p 8000:8000 caiolueno/ml-api
+```
+
+## Running
+
+Two options to run the API:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+or using the docker container as described before:
+
+```bash
+sudo docker build -t caiolueno/ml-api .
+sudo docker run --network=host -p 8000:8000 caiolueno/ml-api
+```
