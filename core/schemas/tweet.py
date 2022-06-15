@@ -28,6 +28,7 @@ class Tweet(BaseModel):
     tweeted_at: str
     text: str
     sentiment: int
+    confidence: float
     hashtags: List[str]
     retweets: List[user.RetweetUser]
     likes: List[user.LikeUser]

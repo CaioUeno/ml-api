@@ -9,6 +9,7 @@ class InInstance(BaseModel):
 
 class PredictedSentiment(InInstance):
     sentiment: str
+    confidence: float
 
 
 class SentimentPrevalence(BaseModel):

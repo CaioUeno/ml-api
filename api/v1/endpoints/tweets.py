@@ -120,6 +120,7 @@ def publish_tweet(user_id: str, new_tweet: tweet.NewTweet, response: Response):
         tweeted_at=utils.time_now(),
         text=new_tweet.text,
         sentiment=ml.bow.predict([new_tweet.text])[0],
+        confidence=ml.bow.predict_proba([new_tweet.text])[0].argmax(),
         hashtags=utils.extract_hashtags(new_tweet.text),
         retweets=[],
         likes=[],
