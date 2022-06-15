@@ -97,6 +97,7 @@ def populate_indices():
         tweeted_at="2022-05-02 12:45:00 -0300",
         text="First tweet! #sideproject #fastapi",
         sentiment=1,
+        confidence=0.76,
         hashtags=["#sideproject", "#fastapi"],
         retweets=[],
         likes=[
@@ -118,6 +119,7 @@ def populate_indices():
         tweeted_at="2022-05-10 20:55:00 -0300",
         text="Awful to manually create those tweets >:c #setup #fastapi",
         sentiment=-1,
+        confidence=0.55,
         hashtags=["#setup", "#fastapi"],
         retweets=[],
         likes=[],
@@ -135,6 +137,7 @@ def populate_indices():
         tweeted_at="2022-05-07 03:10:00 -0300",
         text="Yeah! Almost there! #fastapi",
         sentiment=-1,
+        confidence=0.89,
         hashtags=["#fastapi"],
         retweets=[
             {
