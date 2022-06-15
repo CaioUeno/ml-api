@@ -2,7 +2,9 @@ import hashlib
 import re
 from configparser import RawConfigParser
 from datetime import datetime, timedelta
-from typing import Any, List
+from typing import Any, Dict, List
+
+import numpy as np
 
 
 def time_now() -> str:
@@ -134,3 +136,32 @@ def get_config(section: str, key: str) -> Any:
         raise KeyError(f"Key does not exist: {key}.")
 
     return config.get(section, key)
+
+
+def adjust_quantification(estimated_rates: np.ndarray, prevalence: Dict[str, int]):
+
+    prevalence_array = np.asarray(
+        [prevalence["negative"], prevalence["neutral"], prevalence["positive"]]
+    )
+    prevalence_array = prevalence_array / prevalence_array.sum()
+
+    adjusted_prevalence = {}
+
+    try:
+        adjusted_count = np.linalg.solve(estimated_rates, prevalence_array)
+        # it may return values outside [0, 1] so clip it
+        adjusted_count = np.clip(adjusted_count, 0, 1)
+
+        # normalize
+        adjusted_count /= adjusted_count.sum()
+        # it may divide by 0
+        adjusted_count = np.nan_to_num(adjusted_count)
+
+        adjusted_prevalence["negative"] = adjusted_count[0]
+        adjusted_prevalence["neutral"] = adjusted_count[1]
+        adjusted_prevalence["positive"] = adjusted_count[2]
+
+        return adjusted_prevalence
+
+    except np.linalg.LinAlgError:
+        return prevalence

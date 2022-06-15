@@ -2,6 +2,8 @@ import json
 import logging
 from typing import Union
 
+import numpy as np
+
 import db
 import ml
 from core import utils
@@ -34,10 +36,13 @@ def classify_text(instance: mlio.InInstance, response: Response):
 
     logging.debug("Predict text.")
     pred_sentiment = ml.bow.predict([instance.text])[0]
+    pred_confidence = ml.bow.predict_proba([instance.text])[0].argmax()
 
     logging.debug("Instantiate response model.")
     out = mlio.PredictedSentiment(
-        text=instance.text, sentiment=utils.sentiment_to_str(pred_sentiment)
+        text=instance.text,
+        sentiment=utils.sentiment_to_str(pred_sentiment),
+        confidence=pred_confidence,
     )
 
     return out
@@ -88,7 +93,8 @@ def quantify_user(
     for b in buckets:
         prevalence[utils.sentiment_to_str(b["key"])] = b["doc_count"]
 
-    return prevalence
+    estimated_rates = np.load("estimated_rates.npy")
+    return utils.adjust_quantification(estimated_rates, prevalence)
 
 
 @router.post(
@@ -123,4 +129,5 @@ def quantify_hashtag(
     for b in buckets:
         prevalence[utils.sentiment_to_str(b["key"])] = b["doc_count"]
 
-    return prevalence
+    estimated_rates = np.load("estimated_rates.npy")
+    return utils.adjust_quantification(estimated_rates, prevalence)
