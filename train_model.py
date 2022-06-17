@@ -2,8 +2,10 @@ import pickle
 
 import numpy as np
 import pandas as pd
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.model_selection import cross_val_score
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 
@@ -26,6 +28,10 @@ def main():
     X = df["text"].tolist()
     y = df["class"].values
 
+    X_train, X_valid, y_train, y_valid = train_test_split(
+        X, y, test_size=0.75, random_state=1, stratify=y
+    )
+
     # instantiate a pipe (vectorizer + model)
     pipe = Pipeline(
         [
@@ -34,14 +40,35 @@ def main():
         ]
     )
 
-    scores = cross_val_score(pipe, X, y, n_jobs=-1, cv=10)
-    print(f"Score average: {np.mean(scores):.4f}")
+    # fit classifier (calibrated)
+    calibrated_classifier = CalibratedClassifierCV(pipe, method="sigmoid", cv=10).fit(
+        X_train, y_train
+    )
 
-    # train model with the whole data and save it
-    pipe.fit(X, y)
+    # evaluate and estimate rates
+    print(
+        f"Accuracy: {accuracy_score(y_valid, calibrated_classifier.predict(X_valid))}"
+    )
+
+    y_valid_pred = calibrated_classifier.predict_proba(X_valid)
+
+    # calculate a "confusion matrix" based on probabilities' expected values - average
+    estimated_rates = np.empty(shape=(3, 3))  # three classes
+
+    for i, label in enumerate([-1, 0, 1]):
+
+        if (y_valid == label).sum() > 0:
+            estimated_rates[i] = y_valid_pred[y_valid == label].mean(axis=0)
+        else:
+            estimated_rates[i] = np.zeros(3)
+
+    estimated_rates = estimated_rates.T
 
     # save model
-    pickle.dump(pipe, open(utils.get_config("ml", "model_filename"), "wb"))
+    pickle.dump(
+        calibrated_classifier, open(utils.get_config("ml", "model_filename"), "wb")
+    )
+    np.save("estimated_rates.npy", estimated_rates)
 
 
 if __name__ == "__main__":

@@ -60,6 +60,7 @@ def sentiment_setup_db() -> bool:
             "tweeted_at": "2022-05-01 14:18:09 -0300",
             "text": tweet1,
             "sentiment": 1,
+            "confidence": 0.95,
             "hashtags": ["#api"],
             "retweets": [],
             "likes": [],
@@ -76,6 +77,7 @@ def sentiment_setup_db() -> bool:
             "tweeted_at": "2022-05-02 14:18:09 -0300",
             "text": tweet2,
             "sentiment": -1,
+            "confidence": 0.55,
             "hashtags": ["#api"],
             "retweets": [],
             "likes": [],
@@ -92,6 +94,7 @@ def sentiment_setup_db() -> bool:
             "tweeted_at": "2022-05-03 14:18:09 -0300",
             "text": tweet3,
             "sentiment": 0,
+            "confidence": 0.72,
             "hashtags": ["#api"],
             "retweets": [],
             "likes": [],
@@ -181,6 +184,7 @@ def tweets_setup_db() -> bool:
             "tweeted_at": utils.time_now(),
             "text": tweet1,
             "sentiment": 0,
+            "confidence": 0.99,
             "hashtags": ["#api"],
             "retweets": [
                 {
@@ -219,6 +223,7 @@ def tweets_setup_db() -> bool:
             "tweeted_at": utils.time_now(),
             "text": tweet2,
             "sentiment": 0,
+            "confidence": 0.45,
             "hashtags": ["#api"],
             "retweets": [],
             "likes": [],
@@ -320,6 +325,7 @@ def users_setup_db() -> bool:
             "tweeted_at": utils.time_now(),
             "text": tweet1,
             "sentiment": 0,
+            "confidence": 0.67,
             "hashtags": ["#api"],
             "retweets": [
                 {
@@ -358,6 +364,7 @@ def users_setup_db() -> bool:
             "tweeted_at": utils.time_now(),
             "text": tweet2,
             "sentiment": 0,
+            "confidence": 0.59,
             "hashtags": ["#api"],
             "retweets": [],
             "likes": [],

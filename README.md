@@ -31,6 +31,7 @@ It represents a tweet. It has an unique id, a reference to the user's id who pub
     "tweeted_at": "",
     "text": "",
     "sentiment": "",
+    "confidence": 1.0,
     "hashtags": [],
     "retweets": [],
     "likes": []
@@ -58,9 +59,53 @@ The *db/setup.py* creates the necessary indices and populates them with examples
 
 ### /users
 
+Implements basic CRUD operations. As well as the follow/unfollow feature.
+
+* GET <http://127.0.0.1:8000/api/v1/users/{user_id>}
+* DELETE <http://127.0.0.1:8000/api/v1/users/{user_id>}
+* POST <http://127.0.0.1:8000/api/v1/users/>
+
+    ```json
+    {
+        "username": "string"
+    }
+    ```
+
+* PUT <http://127.0.0.1:8000/api/v1/users/{follower_id}/follow/{followed_id>}
+* PUT <http://127.0.0.1:8000/api/v1/users/{follower_id}/unfollow/{followed_id>}
+
 ### /tweets
 
+Implements basic CRUD operations. Also, there are endpoints for *retweet* and *like*.
+
+* GET <http://127.0.0.1:8000/api/v1/tweets/{tweet_id>}
+* GET <http://127.0.0.1:8000/api/v1/tweets/user/{user_id>}
+* POST <http://127.0.0.1:8000/api/v1/tweets/{user_id}/tweet>
+
+    ```json
+    {
+        "text": "string"
+    }
+    ```
+
+* POST <http://127.0.0.1:8000/api/v1/tweets/{user_id}/retweet/{tweet_id>}
+* POST <http://127.0.0.1:8000/api/v1/tweets/{user_id}/like/{tweet_id>}
+* DELETE <http://127.0.0.1:8000/api/v1/tweets/{tweet_id>}
+
 ### /sentiment
+
+Implements endpoints for classify and quantify tweet's sentiment.
+
+* POST <http://127.0.0.1:8000/api/v1/sentiment/classify>
+
+    ```json
+    {
+        "text": "string"
+    }
+    ```
+
+* POST <http://127.0.0.1:8000/api/v1/sentiment/quantify/user/{user_id>}
+* POST <http://127.0.0.1:8000/api/v1/sentiment/quantify/hashtag/{hashtag>}
 
 ## Machine Learning
 
@@ -81,7 +126,7 @@ I set up the tests using the [pytest framework](https://docs.pytest.org/en/7.1.x
 To run the tests use:
 
 ```bash
-python3 -m pytest -vv --disable-warnings -durations=0
+python3 -m pytest -vv --disable-warnings --durations=0
 ```
 
 ### .coveragerc
